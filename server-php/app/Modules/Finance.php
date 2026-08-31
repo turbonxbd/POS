@@ -35,6 +35,10 @@ final class Finance
                 'sortMap' => ['at' => 'at', 'amount' => 'amount', 'category' => 'category'],
                 'defaultSort' => 'at', 'defaultDir' => 'desc',
                 'filters' => ['category' => 'category', 'branchId' => 'branch_id'], 'dateColumn' => 'at',
+                'summarize' => static fn ($list) => [
+                    'totalAmount' => array_sum(array_map(static fn ($e) => (int) ($e['amount'] ?? 0), $list)),
+                    'count' => count($list),
+                ],
             ],
             'columns' => static fn (array $d) => ['reference' => $d['reference'] ?? null, 'branch_id' => $d['branchId'] ?? null, 'category' => $d['category'] ?? null, 'amount' => (int) ($d['amount'] ?? 0), 'at' => $d['at'] ?? Clock::now()],
             'normalize' => static function (array $b, ?array $e) use ($app) {
@@ -235,6 +239,19 @@ final class Finance
             'table' => 'register_sessions', 'query' => $q, 'baseWhere' => implode(' AND ', $where), 'params' => $params,
             'searchCols' => ['reference'], 'sortMap' => ['openedAt' => 'opened_at', 'reference' => 'reference'],
             'defaultSort' => 'openedAt', 'defaultDir' => 'desc',
+            'summarize' => function ($list) use ($ctx) {
+                $open = array_values(array_filter($list, static fn ($s) => ($s['status'] ?? '') === 'open'));
+                $cashOpen = 0;
+                foreach ($open as $s) {
+                    $cashOpen += (int) (self::withTotals($ctx, $s)['expectedCash'] ?? 0);
+                }
+                return [
+                    'sessions' => count($list),
+                    'open' => count($open),
+                    'cashOnHandOpen' => $cashOpen,
+                    'discrepancies' => count(array_filter($list, static fn ($s) => !empty($s['difference']))),
+                ];
+            },
         ]);
         $result['data'] = array_map(fn ($s) => self::withTotals($ctx, $s), $result['data']);
         return Response::json($result);

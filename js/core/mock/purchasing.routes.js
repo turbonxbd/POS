@@ -100,6 +100,11 @@ export default function register(router) {
     const result = applyListQuery(rows.map(decoratePurchase), query, {
       searchable: ['reference', 'supplierName', 'invoiceRef'],
       sortable: ['createdAt', 'reference', 'grandTotal', 'status'], defaultSort: 'createdAt', defaultDir: 'desc',
+      summarize: (list) => ({
+        orders: list.length,
+        totalValue: list.reduce((s, r) => s + (r.grandTotal || 0), 0),
+        outstandingPayable: list.reduce((s, r) => s + (r.dueTotal || 0), 0),
+      }),
     });
     return ok(result);
   });

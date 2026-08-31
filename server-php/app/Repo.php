@@ -260,11 +260,24 @@ final class Repo
             $data = array_map($opts['transform'], $data);
         }
 
-        return [
+        $result = [
             'data' => $data, 'page' => $page, 'pageSize' => $pageSize,
             'total' => $total, 'totalPages' => $totalPages,
             'sort' => $sortKey, 'dir' => strtolower($dir),
         ];
+
+        // summarize(fullFilteredList): stat-strip figures over the WHOLE filtered
+        // set, mirroring applyListQuery's `summarize` option in the mock.
+        if (!empty($opts['summarize']) && is_callable($opts['summarize'])) {
+            $allRows = $this->db->all("SELECT doc FROM {$opts['table']} WHERE {$whereSql} ORDER BY {$sortCol} {$dir}, id {$dir}", $params);
+            $allDocs = array_map(static fn ($r) => json_decode($r['doc'], true), $allRows);
+            if (!empty($opts['transform'])) {
+                $allDocs = array_map($opts['transform'], $allDocs);
+            }
+            $result['summary'] = ($opts['summarize'])($allDocs);
+        }
+
+        return $result;
     }
 
     private static function prefix(array $columns): array

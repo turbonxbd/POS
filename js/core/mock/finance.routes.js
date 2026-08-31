@@ -28,6 +28,10 @@ export default function register(router) {
       sortable: ['at', 'amount', 'category'], defaultSort: 'at', defaultDir: 'desc',
       filters: { category: 'category', paymentMethod: 'paymentMethod', branchId: 'branchId' },
       dateField: 'at',
+      summarize: (list) => ({
+        totalAmount: list.reduce((s, e) => s + (e.amount || 0), 0),
+        count: list.length,
+      }),
     },
     beforeCreate: (b) => {
       if (!EXPENSE_CATEGORIES.includes(b.category)) badRequest('Choose a valid expense category', { category: 'Invalid' });
@@ -137,6 +141,12 @@ export default function register(router) {
     return ok(applyListQuery(decorated, query, {
       searchable: ['reference', 'cashierName'], sortable: ['openedAt', 'reference', 'expectedCash'],
       defaultSort: 'openedAt', defaultDir: 'desc',
+      summarize: (list) => ({
+        sessions: list.length,
+        open: list.filter((r) => r.status === 'open').length,
+        cashOnHandOpen: list.filter((r) => r.status === 'open').reduce((s, r) => s + (r.expectedCash || 0), 0),
+        discrepancies: list.filter((r) => r.difference).length,
+      }),
     }));
   });
 

@@ -150,6 +150,12 @@ await step('purchasing', async () => {
   T('receiving adds stock', (await http.get('/products/' + np.id, { params: { branchId: B } })).stock === before + 20);
   await http.post('/purchases/' + po.id + '/returns', { reason: 'defective', lines: [{ lineId: po.lines[0].id, qty: 5 }] });
   T('purchase return removes stock', (await http.get('/products/' + np.id, { params: { branchId: B } })).stock === before + 15);
+
+  // stat-strip summary is computed over the whole filtered set, not page 1
+  const pg = await http.get('/purchases', { params: { pageSize: 1, from: '2000-01-01' } });
+  const full = await http.get('/purchases', { params: { pageSize: 'all', from: '2000-01-01' } });
+  T('purchases summary is whole-set (not page 1)', pg.summary && pg.summary.orders === full.total && pg.data.length === 1);
+  T('purchases summary totals match the full list', pg.summary.totalValue === (full.data || []).reduce((s, r) => s + r.grandTotal, 0));
 });
 
 // ---- people / finance / org ----
@@ -168,6 +174,21 @@ await step('register', async () => {
   await http.post('/cash-register/sessions/' + reg.id + '/movements', { direction: 'in', amount: 10000, reason: 'cash_in' });
   const closed = await http.post('/cash-register/sessions/' + reg.id + '/close', { countedCash: 310000 });
   T('register close computes expected vs counted', closed.difference === 0, 'diff ' + closed.difference);
+
+  const rs = await http.get('/cash-register/sessions', { params: { pageSize: 1 } });
+  const rsAll = await http.get('/cash-register/sessions', { params: { pageSize: 'all' } });
+  T('register-session summary counts every session', rs.summary && rs.summary.sessions === rsAll.total);
+});
+await step('list summaries (expenses + returns)', async () => {
+  await http.post('/expenses', { branchId: B, category: 'Electricity', description: 'QA power bill', amount: 12345, paymentMethod: 'cash', at: new Date().toISOString() });
+  const ex1 = await http.get('/expenses', { params: { pageSize: 1, from: '2000-01-01' } });
+  const exAll = await http.get('/expenses', { params: { pageSize: 'all', from: '2000-01-01' } });
+  T('expenses summary sums the whole set', ex1.summary && ex1.summary.totalAmount === (exAll.data || []).reduce((s, e) => s + e.amount, 0));
+  T('expenses summary count matches total', ex1.summary.count === exAll.total);
+
+  const rr = await http.get('/sale-returns', { params: { pageSize: 1, from: '2000-01-01' } });
+  const rrAll = await http.get('/sale-returns', { params: { pageSize: 'all', from: '2000-01-01' } });
+  T('sale-returns summary is whole-set', rr.summary && (rr.summary.returns + rr.summary.exchanges) === rrAll.total);
 });
 await step('settings', async () => {
   const st = await http.get('/settings');

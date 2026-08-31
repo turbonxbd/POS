@@ -38,19 +38,15 @@ export default async function salesReturnsPage(ctx, mount) {
     emptyState: { icon: 'undo', title: 'No returns in this period' },
     fetcher: async (params) => {
       const range = resolveRange(params.preset || 'this_month');
-      const res = await salesService.getReturns({ ...params });
-      const rows = (res.data || []).filter((r) => {
-        const t = new Date(r.at).getTime();
-        return t >= new Date(range.from).getTime() && t <= new Date(range.to).getTime();
-      });
-      const exchanges = rows.filter((r) => r.type === 'exchange').length;
+      const res = await salesService.getReturns({ ...params, from: range.from, to: range.to });
+      const s = res.summary || {};
       strip.innerHTML = statStrip([
-        { label: 'Returns', value: rows.length - exchanges },
-        { label: 'Exchanges', value: exchanges },
-        { label: 'Total refunded', value: money.format(rows.reduce((s, r) => s + (r.refundTotal || 0), 0)) },
-        { label: 'Extra collected', value: money.format(rows.reduce((s, r) => s + (r.additionalPayment || 0), 0)) },
+        { label: 'Returns', value: s.returns ?? 0 },
+        { label: 'Exchanges', value: s.exchanges ?? 0 },
+        { label: 'Total refunded', value: money.format(s.totalRefunded ?? 0) },
+        { label: 'Extra collected', value: money.format(s.extraCollected ?? 0) },
       ]);
-      return { ...res, data: rows, total: rows.length, totalPages: 1, page: 1 };
+      return res;
     },
     onRowClick: (row) => openModal({
       title: `${row.type === 'exchange' ? 'Exchange' : 'Return'} · ${row.reference}`,

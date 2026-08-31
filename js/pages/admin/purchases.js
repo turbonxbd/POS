@@ -47,11 +47,11 @@ export default async function purchasesPage(ctx, mount) {
     fetcher: async (params) => {
       const range = resolveRange(params.preset || 'this_year');
       const res = await purchaseService.getPurchases({ ...params, from: range.from, to: range.to });
-      const rows = res.data || [];
+      const s = res.summary || {};
       strip.innerHTML = statStrip([
-        { label: 'Orders', value: res.total },
-        { label: 'Total value', value: money.format(rows.reduce((s, r) => s + r.grandTotal, 0)) },
-        { label: 'Outstanding payable', value: money.format(rows.reduce((s, r) => s + r.dueTotal, 0)) },
+        { label: 'Orders', value: s.orders ?? res.total },
+        { label: 'Total value', value: money.format(s.totalValue ?? 0) },
+        { label: 'Outstanding payable', value: money.format(s.outstandingPayable ?? 0) },
       ]);
       return res;
     },

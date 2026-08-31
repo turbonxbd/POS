@@ -494,6 +494,16 @@ export default function register(router) {
     return ok(applyListQuery(rows, query, {
       searchable: ['reference', 'invoiceNo', 'reason'],
       sortable: ['at', 'reference', 'refundTotal'], defaultSort: 'at', defaultDir: 'desc',
+      dateField: 'at',
+      summarize: (list) => {
+        const exchanges = list.filter((r) => r.type === 'exchange').length;
+        return {
+          returns: list.length - exchanges,
+          exchanges,
+          totalRefunded: list.reduce((s, r) => s + (r.refundTotal || 0), 0),
+          extraCollected: list.reduce((s, r) => s + (r.additionalPayment || 0), 0),
+        };
+      },
     }));
   });
 

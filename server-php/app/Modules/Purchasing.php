@@ -151,6 +151,11 @@ final class Purchasing
             'table' => 'purchases', 'query' => $q, 'baseWhere' => implode(' AND ', $where), 'params' => $params,
             'searchCols' => ['reference'], 'sortMap' => ['createdAt' => 'created_at', 'reference' => 'reference', 'grandTotal' => 'grand_total', 'status' => 'status'],
             'defaultSort' => 'createdAt', 'defaultDir' => 'desc', 'dateColumn' => 'created_at',
+            'summarize' => static fn ($list) => [
+                'orders' => count($list),
+                'totalValue' => array_sum(array_map(static fn ($r) => (int) ($r['grandTotal'] ?? 0), $list)),
+                'outstandingPayable' => array_sum(array_map(static fn ($r) => (int) ($r['dueTotal'] ?? 0), $list)),
+            ],
         ]);
         $result['data'] = array_map(fn ($p) => self::decorate($ctx, $p), $result['data']);
         return Response::json($result);

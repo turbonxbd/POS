@@ -37,12 +37,12 @@ export default async function cashRegisterPage(ctx, mount) {
     emptyState: { icon: 'drawer', title: 'No register sessions yet' },
     fetcher: async (params) => {
       const res = await cashRegisterService.getSessions(params);
-      const rows = res.data || [];
+      const s = res.summary || {};
       strip.innerHTML = statStrip([
-        { label: 'Sessions', value: res.total },
-        { label: 'Currently open', value: rows.filter((r) => r.status === 'open').length },
-        { label: 'Cash on hand (open)', value: money.format(rows.filter((r) => r.status === 'open').reduce((s, r) => s + r.expectedCash, 0)) },
-        { label: 'Shortages/overages', value: rows.filter((r) => r.difference).length },
+        { label: 'Sessions', value: s.sessions ?? res.total },
+        { label: 'Currently open', value: s.open ?? 0 },
+        { label: 'Cash on hand (open)', value: money.format(s.cashOnHandOpen ?? 0) },
+        { label: 'Shortages/overages', value: s.discrepancies ?? 0 },
       ]);
       return res;
     },

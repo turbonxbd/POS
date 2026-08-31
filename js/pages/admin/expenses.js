@@ -50,10 +50,10 @@ export default async function expensesPage(ctx, mount) {
     fetcher: async (params) => {
       const range = resolveRange(params.preset || 'this_month');
       const res = await expenseService.getExpenses({ ...params, from: range.from, to: range.to });
-      const total = (res.data || []).reduce((s, e) => s + e.amount, 0);
+      const s = res.summary || {};
       strip.innerHTML = statStrip([
-        { label: 'Expenses (page period)', value: money.format(res.total ? total : total) },
-        { label: 'Records', value: res.total },
+        { label: 'Total expenses', value: money.format(s.totalAmount ?? 0) },
+        { label: 'Records', value: s.count ?? res.total ?? 0 },
       ]);
       return res;
     },

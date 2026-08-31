@@ -130,7 +130,13 @@ test('expenses: create with generated reference + category guard', function () {
     $e = authed($kit, $s, 'POST', '/api/expenses', ['json' => ['category' => 'Rent', 'amount' => 850000, 'description' => 'Shop rent', 'branchId' => $kit->branchId]]);
     expect_eq($e['status'], 201);
     expect(str_starts_with($e['body']['reference'], 'EXP-'));
-    expect_eq(authed($kit, $s, 'GET', '/api/expenses', [])['body']['total'], 1);
+    authed($kit, $s, 'POST', '/api/expenses', ['json' => ['category' => 'Internet', 'amount' => 200000, 'description' => 'ISP', 'branchId' => $kit->branchId]]);
+    $list = authed($kit, $s, 'GET', '/api/expenses', ['query' => ['pageSize' => 1]]);
+    expect_eq($list['body']['total'], 2);
+    // stat-strip summary is whole-set, not just the returned page
+    expect_eq($list['body']['summary']['count'], 2);
+    expect_eq($list['body']['summary']['totalAmount'], 1050000);
+    expect_eq(count($list['body']['data']), 1);
 });
 
 test('discounts: create + coupon validate', function () {
@@ -164,6 +170,11 @@ test('cash register: open, sale attaches, movement, close reconciles', function 
     $close = authed($kit, $s, 'POST', "/api/cash-register/sessions/{$sid}/close", ['json' => ['countedCash' => 369000]]);
     expect_eq($close['body']['difference'], -1000);
     expect_eq($close['body']['status'], 'closed');
+
+    $list = authed($kit, $s, 'GET', '/api/cash-register/sessions', ['query' => ['pageSize' => 1]]);
+    expect_eq($list['body']['summary']['sessions'], 1);
+    expect_eq($list['body']['summary']['open'], 0);
+    expect_eq($list['body']['summary']['discrepancies'], 1);
 });
 
 /* purchasing --------------------------------------------------------- */
@@ -195,4 +206,8 @@ test('purchases: create bumps supplier balance; receive adds stock; return remov
     expect_eq($pret['status'], 201, json_encode($pret['body']));
     expect_eq($pret['body']['returnTotal'], 50000);
     expect_eq(stockNow($kit, $s, $p['id']), 15);
+
+    $list = authed($kit, $s, 'GET', '/api/purchases', ['query' => ['pageSize' => 1]]);
+    expect_eq($list['body']['summary']['orders'], 1);
+    expect_eq($list['body']['summary']['totalValue'], 200000);
 });

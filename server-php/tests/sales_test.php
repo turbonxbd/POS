@@ -106,6 +106,12 @@ test('return: full return restocks and marks the sale refunded + refund payment'
     expect_eq($detail['body']['status'], 'refunded');
     // one 'in' payment + one 'out' refund
     expect_eq(count($detail['body']['payments']), 2);
+
+    // list-endpoint stat-strip summary covers the whole filtered set
+    $list = authed($kit, $s, 'GET', '/api/sale-returns', ['query' => ['pageSize' => 1]]);
+    expect_eq($list['body']['summary']['returns'], 1);
+    expect_eq($list['body']['summary']['exchanges'], 0);
+    expect_eq($list['body']['summary']['totalRefunded'], 60000);
 });
 
 test('exchange: return one item, replace with a dearer one, customer pays the difference', function () {

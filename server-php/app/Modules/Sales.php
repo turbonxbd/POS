@@ -434,6 +434,15 @@ final class Sales
             'table' => 'sale_returns', 'query' => $q, 'baseWhere' => implode(' AND ', $where), 'params' => $params,
             'searchCols' => ['reference'], 'sortMap' => ['at' => 'at', 'reference' => 'reference'],
             'defaultSort' => 'at', 'defaultDir' => 'desc', 'dateColumn' => 'at',
+            'summarize' => static function ($list) {
+                $exchanges = count(array_filter($list, static fn ($r) => ($r['type'] ?? '') === 'exchange'));
+                return [
+                    'returns' => count($list) - $exchanges,
+                    'exchanges' => $exchanges,
+                    'totalRefunded' => array_sum(array_map(static fn ($r) => (int) ($r['refundTotal'] ?? 0), $list)),
+                    'extraCollected' => array_sum(array_map(static fn ($r) => (int) ($r['additionalPayment'] ?? 0), $list)),
+                ];
+            },
         ]));
     }
 

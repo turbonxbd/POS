@@ -160,5 +160,9 @@ export function applyListQuery(rows, query = {}, options = {}) {
   const page = Math.min(Math.max(1, Number(query.page) || 1), totalPages);
   const data = list.slice((page - 1) * pageSize, page * pageSize);
 
-  return { data, page, pageSize, total, totalPages, sort, dir: dir === 1 ? 'asc' : 'desc' };
+  const out = { data, page, pageSize, total, totalPages, sort, dir: dir === 1 ? 'asc' : 'desc' };
+  // `summarize(fullFilteredList)` lets a list endpoint return stat-strip figures
+  // computed over the WHOLE filtered set, not just the current page.
+  if (typeof options.summarize === 'function') out.summary = options.summarize(list);
+  return out;
 }
