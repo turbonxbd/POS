@@ -66,7 +66,12 @@ export function tableCard({ head, rows, empty = 'Nothing here yet.' }) {
   </div>`;
 }
 
+// True only while a liveRefresh re-render is in flight, so `loading()` can keep
+// the current view on screen instead of flashing a spinner over live data.
+let _refreshing = false;
+
 export function loading(body) {
+  if (_refreshing && body?.children?.length && !body.querySelector('.loading-block')) return;
   body.innerHTML = `<div class="loading-block"><span class="spinner"></span></div>`;
 }
 
@@ -88,7 +93,8 @@ export function liveRefresh(anchorEl, fn, delay = 900) {
       if (!anchorEl.isConnected) { off(); _liveByMount.delete(anchorEl); return; }
       if (document.querySelector('.overlay')) return;
       if (document.visibilityState === 'hidden') return;
-      fn();
+      _refreshing = true;
+      Promise.resolve().then(fn).finally(() => { _refreshing = false; });
     }, delay);
   });
   _liveByMount.set(anchorEl, off);

@@ -181,6 +181,7 @@ const R = '../';
 
   const routes = [
     ['#/merchants', '.sa-row, .sa-tablecard'],
+    ['#/approvals', '#sa-body'],
     ['#/subscriptions', '.sa-tablecard'],
     ['#/payments', '.sa-filterbar'],
     ['#/plans', '.sa-plans, .sa-plan'],
@@ -207,6 +208,7 @@ const R = '../';
   const dm = win.document.getElementById('main');
   T('merchant detail renders without an error box', !dm.querySelector('.alert--danger'), dm.querySelector('.alert__body')?.textContent);
   T('merchant detail shows the subscription + usage cards', (dm.querySelectorAll('.sa-detail-grid .card').length >= 3), String(dm.querySelectorAll('.sa-detail-grid .card').length));
+  T('merchant detail shows the internal notes & tags card', !!dm.querySelector('.js-note-input') && !!dm.querySelector('.js-tag-input'));
   T('merchant detail sets the business name as the page title', (dm.querySelector('h1')?.textContent || '').length > 0, dm.querySelector('h1')?.textContent);
 
   const realErrs = errs.filter((e) => !e.includes('Not implemented') && !e.includes('[chart]') && !e.includes('MutationObserver'));

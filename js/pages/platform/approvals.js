@@ -41,16 +41,36 @@ export default async function approvalsPage(ctx, mount) {
       return;
     }
 
+    const approvable = rows.filter((r) => r.pendingPayment || r.subscriptionStatus === 'pending' || r.subscriptionStatus === 'past_due' || r.subscriptionStatus === 'expired');
     p.body.innerHTML = `
       <div class="sa-attn-strip">
         <span>${icon('user', { size: 14 })} ${c.accounts || 0} account${c.accounts === 1 ? '' : 's'} to approve</span>
         <span>${icon('credit-card', { size: 14 })} ${c.payments || 0} payment${c.payments === 1 ? '' : 's'} to verify</span>
         <span>${icon('clock', { size: 14 })} ${c.overdue || 0} overdue</span>
       </div>
+      ${approvable.length > 1 ? `<div class="sa-bulkbar">
+        <label><input type="checkbox" class="js-sel-all"> Select all approvable (${approvable.length})</label>
+        <span class="grow"></span>
+        <button class="btn btn--primary btn--sm js-approve-sel" disabled>Approve <span class="js-sel-n">0</span> selected</button>
+      </div>` : ''}
       <div class="sa-approvals">${rows.map(cardHtml).join('')}</div>`;
 
     p.body.querySelectorAll('.js-approve').forEach((b) => b.addEventListener('click', () => approve(b.dataset.id, b.dataset.name)));
     p.body.querySelectorAll('.js-reject').forEach((b) => b.addEventListener('click', () => reject(b.dataset.id)));
+
+    const selBar = p.body.querySelector('.js-approve-sel');
+    const syncSel = () => {
+      const n = p.body.querySelectorAll('.js-sel:checked').length;
+      if (!selBar) return;
+      p.body.querySelector('.js-sel-n').textContent = n;
+      selBar.disabled = n === 0;
+    };
+    p.body.querySelectorAll('.js-sel').forEach((cb) => cb.addEventListener('change', syncSel));
+    p.body.querySelector('.js-sel-all')?.addEventListener('change', (e) => {
+      p.body.querySelectorAll('.js-sel').forEach((cb) => { cb.checked = e.target.checked; });
+      syncSel();
+    });
+    selBar?.addEventListener('click', () => approveSelected([...p.body.querySelectorAll('.js-sel:checked')].map((cb) => cb.dataset.id)));
     p.body.querySelectorAll('.js-proof').forEach((a) => a.addEventListener('click', (e) => {
       e.preventDefault();
       const img = a.dataset.src;
@@ -62,11 +82,15 @@ export default async function approvalsPage(ctx, mount) {
   function cardHtml(r) {
     const pay = r.pendingPayment;
     const owed = pay ? pay.amount : (r.dueAmount || r.setupPrice || 0);
+    const canApprove = r.pendingPayment || ['pending', 'past_due', 'expired'].includes(r.subscriptionStatus);
     return `<div class="sa-card sa-approval">
       <div class="sa-approval__head">
-        <div>
-          <a class="sa-approval__biz" href="#/merchants/${escapeHtml(r.merchantId)}">${escapeHtml(r.businessName)}</a>
-          <div class="muted text-sm">${escapeHtml(r.ownerName)} · ${escapeHtml(r.email)}</div>
+        <div class="row" style="gap:8px;align-items:flex-start">
+          ${canApprove ? `<input type="checkbox" class="js-sel" data-id="${escapeHtml(r.merchantId)}" aria-label="Select ${escapeHtml(r.businessName)}" style="margin-top:3px">` : ''}
+          <div>
+            <a class="sa-approval__biz" href="#/merchants/${escapeHtml(r.merchantId)}">${escapeHtml(r.businessName)}</a>
+            <div class="muted text-sm">${escapeHtml(r.ownerName)} · ${escapeHtml(r.email)}</div>
+          </div>
         </div>
         ${badge(r.subscriptionStatus)}
       </div>
@@ -101,6 +125,20 @@ export default async function approvalsPage(ctx, mount) {
       await render();
     } catch (err) { toast.error(err?.data?.message || 'Could not approve'); }
   }
+  async function approveSelected(ids) {
+    if (!ids.length) return;
+    if (!(await confirmDialog({ title: `Approve ${ids.length} merchant${ids.length === 1 ? '' : 's'}?`, message: 'Each pending payment is verified, the account is activated, and every merchant is notified.', confirmLabel: `Approve ${ids.length}` }))) return;
+    let ok = 0;
+    const fail = [];
+    for (const id of ids) {
+      try { await platformService.approveMerchant(id); ok++; } catch { fail.push(id); }
+    }
+    if (ok) toast.success(`Approved ${ok} merchant${ok === 1 ? '' : 's'}`);
+    if (fail.length) toast.error(`${fail.length} could not be approved — check them individually.`);
+    loading(p.body);
+    await render();
+  }
+
   async function reject(id) {
     const reason = window.prompt('Reason for rejecting (shown to the merchant):', '');
     if (reason === null) return;
