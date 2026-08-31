@@ -13,7 +13,9 @@ import { resolveRange, isoDateKey } from '../../utils/date.js';
 import * as lib from './report-lib.js';
 
 function scope(query) {
-  const branchId = query.branchId || resolveBranchId();
+  // branchId 'all' (or explicit empty) means "every branch" - the report
+  // selectors already treat a null branchId as no filter.
+  const branchId = query.branchId === 'all' ? null : (query.branchId || resolveBranchId());
   const range =
     query.from || query.to
       ? { from: query.from || new Date(0).toISOString(), to: query.to || new Date().toISOString() }

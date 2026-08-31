@@ -195,6 +195,17 @@ await step('dead-stock report', async () => {
   T('stockStatus filter narrows the rows', slow.rows.every((r) => r.status === 'slow'));
 });
 T('dashboard aggregates from persisted sales', (await http.get('/dashboard', { params: { branchId: B, preset: 'this_year' } })).kpis.totalSales > 0);
+await step('all-branches scope', async () => {
+  const B2 = login.branches[1].id;
+  const one = await http.get('/dashboard', { params: { branchId: B, preset: 'this_year' } });
+  const two = await http.get('/dashboard', { params: { branchId: B2, preset: 'this_year' } });
+  const all = await http.get('/dashboard', { params: { branchId: 'all', preset: 'this_year' } });
+  T('branchId=all dashboard >= a single branch', all.kpis.totalSales >= one.kpis.totalSales);
+  T('branchId=all dashboard covers both branches', all.kpis.totalSales >= one.kpis.totalSales + two.kpis.totalSales - 1);
+  const repAll = await http.get('/reports/sales', { params: { branchId: 'all', preset: 'this_year' } });
+  const repOne = await http.get('/reports/sales', { params: { branchId: B, preset: 'this_year' } });
+  T('branchId=all sales report has at least as many rows', repAll.rows.length >= repOne.rows.length);
+});
 T('audit log append-only & populated', (await http.get('/audit-logs', { params: { pageSize: 5 } })).data.length > 0);
 await step('audit log filters', async () => {
   const all = await http.get('/audit-logs', { params: { pageSize: 'all' } });

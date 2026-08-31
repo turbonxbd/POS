@@ -40,7 +40,9 @@ export default async function reportsPage(ctx, mount) {
   const filters = { ...q };
 
   const meta = reportMeta(type);
-  const branch = (store.get('branches') || []).find((b) => b.id === store.get('activeBranchId'));
+  const allBranches = (store.get('branches') || []).filter((b) => !b.archivedAt);
+  const branch = allBranches.find((b) => b.id === store.get('activeBranchId'));
+  let branchScope = q.branchId || store.get('activeBranchId') || '';
 
   const shell = pageShell(mount, {
     title: meta?.label || 'Report',
@@ -61,6 +63,10 @@ export default async function reportsPage(ctx, mount) {
       <select class="select js-type" style="width:auto" aria-label="Report">
         ${available.map((r) => `<option value="${r.type}" ${r.type === type ? 'selected' : ''}>${r.label}</option>`).join('')}
       </select>
+      ${allBranches.length > 1 ? `<select class="select js-branch" style="width:auto" aria-label="Branch">
+        <option value="all" ${branchScope === 'all' ? 'selected' : ''}>All branches</option>
+        ${allBranches.map((b) => `<option value="${b.id}" ${branchScope === b.id ? 'selected' : ''}>${escapeHtml(b.name)}</option>`).join('')}
+      </select>` : ''}
       ${meta?.dated !== false ? `
       <div class="segmented" id="dt-seg" role="group" aria-label="Period">
         ${PRESETS.map(([v, l]) => `<button data-p="${v}" aria-pressed="${v === preset}">${l}</button>`).join('')}
@@ -83,6 +89,7 @@ export default async function reportsPage(ctx, mount) {
   $('.js-type').addEventListener('change', () => {
     location.hash = `#/reports/${$('.js-type').value}?${rangeQS()}`;
   });
+  $('.js-branch')?.addEventListener('change', (e) => { branchScope = e.target.value; load(); });
   $('#dt-seg')?.addEventListener('click', (e) => {
     const b = e.target.closest('button[data-p]');
     if (!b) return;
@@ -128,6 +135,7 @@ export default async function reportsPage(ctx, mount) {
       if (v && v !== 'all') params[key] = v;
     }
     if (filters.customerId) params.customerId = filters.customerId;
+    if (branchScope) params.branchId = branchScope;
     try {
       current = await reportService.getReport(type, params);
       renderReport();

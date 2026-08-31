@@ -41,15 +41,18 @@ export default async function dashboardPage(ctx, mount) {
   // always shows today's numbers again.
   const preset = custom ? 'custom' : q.preset || 'today';
 
-  const branch = (store.get('branches') || []).find((b) => b.id === store.get('activeBranchId'));
+  const allBranches = (store.get('branches') || []).filter((b) => !b.archivedAt);
+  const branchScope = q.branch || store.get('activeBranchId') || '';
+  const branch = allBranches.find((b) => b.id === branchScope);
   const shell = pageShell(mount, {
     title: 'Dashboard',
-    subtitle: `${store.get('business')?.name || 'TX Demo'}${branch ? ' · ' + branch.name : ''}`,
+    subtitle: `${store.get('business')?.name || 'TX Demo'} · ${branchScope === 'all' ? 'All branches' : (branch ? branch.name : 'All branches')}`,
     actions: [can('reports.export') && { label: 'Export', icon: 'download', variant: 'outline', onClick: () => exportCurrent() }].filter(Boolean),
   });
 
+  const branchQS = () => (branchScope ? `&branch=${encodeURIComponent(branchScope)}` : '');
   const rangeQS = () => (custom ? `from=${encodeURIComponent(custom.from)}&to=${encodeURIComponent(custom.to)}` : `preset=${preset}`);
-  const reportHref = (type, extra = '') => `#/reports/${type}?${rangeQS()}${extra ? '&' + extra : ''}`;
+  const reportHref = (type, extra = '') => `#/reports/${type}?${rangeQS()}${branchScope && branchScope !== store.get('activeBranchId') ? `&branchId=${encodeURIComponent(branchScope)}` : ''}${extra ? '&' + extra : ''}`;
 
   shell.body.innerHTML = `
     <div class="filter-bar" style="justify-content:space-between">
@@ -57,11 +60,17 @@ export default async function dashboardPage(ctx, mount) {
         ${PRESETS.map((p) => `<button data-p="${p.value}" aria-pressed="${p.value === preset}">${p.label}</button>`).join('')}
         <button data-p="custom" aria-pressed="${preset === 'custom'}">Custom</button>
       </div>
-      <div class="row js-custom" ${preset === 'custom' ? '' : 'hidden'}>
-        <input type="date" class="input js-from" value="${custom?.from?.slice(0, 10) || ''}" style="width:auto;height:34px">
-        <span class="muted">to</span>
-        <input type="date" class="input js-to" value="${custom?.to?.slice(0, 10) || ''}" style="width:auto;height:34px">
-        <button class="btn btn--sm js-apply">Apply</button>
+      <div class="row" style="gap:var(--sp-2)">
+        ${allBranches.length > 1 ? `<select class="select js-branch" style="width:auto;height:34px" aria-label="Branch">
+          <option value="all" ${branchScope === 'all' ? 'selected' : ''}>All branches</option>
+          ${allBranches.map((b) => `<option value="${b.id}" ${branchScope === b.id ? 'selected' : ''}>${escapeHtml(b.name)}</option>`).join('')}
+        </select>` : ''}
+        <div class="row js-custom" ${preset === 'custom' ? '' : 'hidden'}>
+          <input type="date" class="input js-from" value="${custom?.from?.slice(0, 10) || ''}" style="width:auto;height:34px">
+          <span class="muted">to</span>
+          <input type="date" class="input js-to" value="${custom?.to?.slice(0, 10) || ''}" style="width:auto;height:34px">
+          <button class="btn btn--sm js-apply">Apply</button>
+        </div>
       </div>
     </div>
     <div id="kpis">${kpiSkeleton(6)}</div>
@@ -76,7 +85,11 @@ export default async function dashboardPage(ctx, mount) {
       $('.js-custom').hidden = false;
       return;
     }
-    location.hash = `#/?preset=${b.dataset.p}`;
+    location.hash = `#/?preset=${b.dataset.p}${branchQS()}`;
+  });
+  $('.js-branch')?.addEventListener('change', (e) => {
+    const b = e.target.value;
+    location.hash = `#/?${rangeQS()}${b ? `&branch=${encodeURIComponent(b)}` : ''}`;
   });
   $('.js-apply').addEventListener('click', applyCustom);
   $('.js-from').addEventListener('keydown', (e) => e.key === 'Enter' && applyCustom());
@@ -89,12 +102,14 @@ export default async function dashboardPage(ctx, mount) {
     // anchor to the viewer's local day boundaries, then store as ISO
     const from = new Date(`${f}T00:00:00`).toISOString();
     const to = new Date(`${t}T23:59:59.999`).toISOString();
-    location.hash = `#/?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
+    location.hash = `#/?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}${branchQS()}`;
   }
 
   let data = null;
   try {
-    data = await reportService.getDashboard(custom ? { from: custom.from, to: custom.to } : { preset });
+    const dParams = custom ? { from: custom.from, to: custom.to } : { preset };
+    if (branchScope) dParams.branchId = branchScope;
+    data = await reportService.getDashboard(dParams);
   } catch (err) {
     $('#kpis').innerHTML = `<div class="alert alert--danger"><div class="alert__body">${escapeHtml(err.message)}</div></div>`;
     $('#charts').innerHTML = '';

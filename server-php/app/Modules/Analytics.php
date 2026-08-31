@@ -25,7 +25,8 @@ final class Analytics
     private static function scope(Context $ctx): array
     {
         $q = $ctx->request->query;
-        $branchId = Branch::resolveId($ctx, $q['branchId'] ?? null);
+        // branchId 'all' means "every branch" - a null branchId is treated as no filter downstream.
+        $branchId = ($q['branchId'] ?? null) === 'all' ? null : Branch::resolveId($ctx, $q['branchId'] ?? null);
         $range = (!empty($q['from']) || !empty($q['to']))
             ? Range::resolve(null, $q['from'] ?? null, $q['to'] ?? null)
             : Range::resolve($q['preset'] ?? 'this_month');

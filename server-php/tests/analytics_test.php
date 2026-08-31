@@ -105,3 +105,28 @@ test('reports: unknown type -> 422', function () {
     $s = $kit->loginAs();
     expect_eq(authed($kit, $s, 'GET', '/api/reports/nonsense', [])['status'], 422);
 });
+
+test('reports/dashboard: branchId=all aggregates across every branch', function () {
+    $kit = new TestKit();
+    $s = $kit->loginAs();
+    $now = \Afia\Support\Clock::now();
+    $b2 = \Afia\Support\Uuid::v4();
+    $kit->db->run("INSERT INTO branches (id, merchant_id, code, name, status, is_default, doc, created_at, updated_at) VALUES (:id,:m,'B2','Branch 2','active',0,:d,:c,:c)",
+        [':id' => $b2, ':m' => $kit->merchantId, ':d' => json_encode(['id' => $b2, 'name' => 'Branch 2', 'code' => 'B2', 'status' => 'active']), ':c' => $now]);
+
+    $a = mkProduct($kit, $s, 'AllBr A', 'ALLB-A', '2000000003042', 10000, 40000, 20);
+    // stock the product at branch 2 as well, then sell from each branch
+    authed($kit, $s, 'POST', '/api/inventory/adjustments', ['json' => ['branchId' => $b2, 'reason' => 'recount', 'lines' => [['productId' => $a['id'], 'deltaQty' => 20]]]]);
+    authed($kit, $s, 'POST', '/api/sales', ['json' => ['branchId' => $kit->branchId, 'items' => [['productId' => $a['id'], 'qty' => 1]], 'payments' => [['method' => 'cash', 'amount' => 40000]]]]);
+    authed($kit, $s, 'POST', '/api/sales', ['json' => ['branchId' => $b2, 'items' => [['productId' => $a['id'], 'qty' => 2]], 'payments' => [['method' => 'cash', 'amount' => 80000]]]]);
+
+    $one = authed($kit, $s, 'GET', '/api/dashboard', ['query' => ['branchId' => $kit->branchId, 'preset' => 'today']])['body'];
+    $two = authed($kit, $s, 'GET', '/api/dashboard', ['query' => ['branchId' => $b2, 'preset' => 'today']])['body'];
+    $all = authed($kit, $s, 'GET', '/api/dashboard', ['query' => ['branchId' => 'all', 'preset' => 'today']])['body'];
+    expect_eq($one['kpis']['totalSales'], 40000);
+    expect_eq($two['kpis']['totalSales'], 80000);
+    expect_eq($all['kpis']['totalSales'], 120000);
+
+    $repAll = authed($kit, $s, 'GET', '/api/reports/sales', ['query' => ['branchId' => 'all', 'preset' => 'today']])['body'];
+    expect_eq(count($repAll['rows']), 2);
+});
