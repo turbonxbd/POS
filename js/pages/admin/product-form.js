@@ -187,16 +187,11 @@ export default async function productFormPage(ctx, mount) {
       { name: 'costPrice', label: 'Purchase Price', type: 'money', required: true, hint: 'What you paid for the product' },
       { name: 'mrp', label: 'MRP', type: 'money', hint: 'Maximum Retail Price — the highest displayed price' },
       { name: 'sellingPrice', label: 'Selling Price', type: 'money', required: true, hint: 'The actual price customers pay' },
-      { name: 'wholesalePrice', label: 'Wholesale price', type: 'money' },
-      { name: 'discountPrice', label: 'Discount price', type: 'money', hint: 'Optional promo price used at the POS' },
       { name: 'taxId', label: 'Tax / VAT', type: 'select', placeholder: 'No tax', options: taxes.map((t) => ({ value: t.id, label: `${t.name} (${t.rate}%)` })), hint: 'Fixed-amount VAT is set in Discount & VAT and applies to every sale.' },
-      { name: 'minStock', label: 'Minimum stock level', type: 'number', min: 0, value: 0 },
-      { name: 'maxStock', label: 'Maximum stock level', type: 'number', min: 0, value: 0 },
     ],
     values: product ? {
       costPrice: product.costPrice, mrp: product.mrp ?? '', sellingPrice: product.sellingPrice,
-      wholesalePrice: product.wholesalePrice, discountPrice: product.discountPrice ?? '',
-      taxId: product.taxId || '', minStock: product.minStock, maxStock: product.maxStock,
+      taxId: product.taxId || '',
     } : {},
     onChange: () => updatePricePreview(),
   });
@@ -348,7 +343,7 @@ export default async function productFormPage(ctx, mount) {
   renderVariants();
   shell.body.querySelector('#add-variant').addEventListener('click', () => {
     const name = formInfo.raw().name || 'Product';
-    variants.push({ id: uuid(), name: '', options: {}, sku: suggestSku(name, ['V' + (variants.length + 1)]), barcode: generateEan13(Date.now() + variants.length), costPrice: formPricing.raw().costPrice || 0, sellingPrice: formPricing.raw().sellingPrice || 0, minStock: formPricing.raw().minStock || 0, openingStock: 0 });
+    variants.push({ id: uuid(), name: '', options: {}, sku: suggestSku(name, ['V' + (variants.length + 1)]), barcode: generateEan13(Date.now() + variants.length), costPrice: formPricing.raw().costPrice || 0, sellingPrice: formPricing.raw().sellingPrice || 0, minStock: 0, openingStock: 0 });
     renderVariants();
   });
 
@@ -381,11 +376,7 @@ export default async function productFormPage(ctx, mount) {
       costPrice: pricing.costPrice,
       sellingPrice: pricing.sellingPrice,
       mrp: pricing.mrp === '' || pricing.mrp == null ? undefined : pricing.mrp,
-      wholesalePrice: pricing.wholesalePrice || 0,
-      discountPrice: pricing.discountPrice === '' || pricing.discountPrice == null ? null : pricing.discountPrice,
       taxId: pricing.taxId || '',
-      minStock: pricing.minStock || 0,
-      maxStock: pricing.maxStock || 0,
       attributes: { color: attr.color, size: attr.size, variant: attr.variant },
       imageId,
       variants: variants.map((vr) => ({ ...vr })),

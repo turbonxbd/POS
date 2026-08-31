@@ -8,6 +8,9 @@ import { blockLoader } from '../../components/skeleton.js';
 import { icon } from '../../components/icons.js';
 import { escapeHtml } from '../../utils/dom.js';
 import { renderBarcode } from '../../components/barcode.js';
+import { openModal } from '../../components/modal.js';
+import { createForm } from '../../components/form.js';
+import { toast } from '../../components/toast.js';
 import { fmtDateTime } from '../../utils/date.js';
 import money from '../../utils/money.js';
 import { titleCase } from '../../utils/format.js';
@@ -38,6 +41,8 @@ export default async function productDetailPage(ctx, mount) {
     breadcrumb: [{ label: 'Products', href: '#/products' }, { label: product.name }],
     actions: [
       can('products.edit') && !product.archivedAt && { label: 'Edit', icon: 'edit', variant: 'primary', href: `#/products/${product.id}/edit` },
+      can('inventory.adjust') && !product.archivedAt && product.trackInventory !== false
+        && { label: 'Add Stock', icon: 'plus', variant: 'outline', onClick: () => openAddStock() },
       can('barcode.manage') && { label: 'Barcode', icon: 'barcode', variant: 'outline', href: `#/barcodes?product=${product.id}` },
     ].filter(Boolean),
   });
@@ -74,8 +79,6 @@ export default async function productDetailPage(ctx, mount) {
           <div class="detail-list__row"><dt>Purchase</dt><dd>${money.format(product.costPrice)}</dd></div>
           ${product.mrp ? `<div class="detail-list__row"><dt>MRP</dt><dd><s class="muted">${money.format(product.mrp)}</s></dd></div>` : ''}
           <div class="detail-list__row"><dt>Selling</dt><dd class="strong">${money.format(product.sellingPrice)}</dd></div>
-          ${product.discountPrice ? `<div class="detail-list__row"><dt>Discount</dt><dd>${money.format(product.discountPrice)}</dd></div>` : ''}
-          <div class="detail-list__row"><dt>Wholesale</dt><dd>${money.format(product.wholesalePrice)}</dd></div>
           <div class="detail-list__row"><dt>Margin</dt><dd>${product.sellingPrice ? Math.round(((product.sellingPrice - product.costPrice) / product.sellingPrice) * 100) : 0}%</dd></div>
         </dl>
       </div>
@@ -88,9 +91,10 @@ export default async function productDetailPage(ctx, mount) {
 
   shell.body.querySelector('#bc').innerHTML = renderBarcode(product.barcode, { height: 50, moduleWidth: 1.6 });
 
+  let stockPanel = null;
   createTabs(shell.body.querySelector('#tabs'), {
     tabs: [
-      { id: 'stock', label: 'Stock', render: (el) => renderStock(el) },
+      { id: 'stock', label: 'Stock', render: (el) => { stockPanel = el; renderStock(el); } },
       { id: 'movements', label: 'Movements', render: (el) => renderMovements(el) },
       product.variants?.length && { id: 'variants', label: `Variants (${product.variants.length})`, render: (el) => renderVariantsTab(el) },
     ].filter(Boolean),
@@ -98,22 +102,63 @@ export default async function productDetailPage(ctx, mount) {
 
   async function renderStock(el) {
     el.innerHTML = blockLoader('Loading stock…');
-    const branches = store.get('branches') || [];
+    const branches = (store.get('branches') || []).filter((b) => !b.archivedAt);
     const rows = [];
     for (const b of branches) {
       const res = await inventoryService.getInventory({ branchId: b.id, product: product.id, pageSize: 'all' }).catch(() => ({ data: [] }));
       (res.data || []).forEach((r) => rows.push({ branch: b.name, ...r }));
     }
+    const canAdd = can('inventory.adjust') && !product.archivedAt && product.trackInventory !== false;
     el.innerHTML = `${statStrip([
       { label: 'Total on hand', value: rows.reduce((s, r) => s + r.quantity, 0) },
       { label: 'Stock value', value: money.format(rows.reduce((s, r) => s + r.stockValue, 0)) },
       { label: 'Branches stocked', value: rows.filter((r) => r.quantity > 0).length },
     ])}
+    ${canAdd ? `<div class="row-between" style="margin:var(--sp-3) 0"><span class="field-hint" style="margin:0">Stock per branch — use <b>Add Stock</b> to receive more into a branch.</span>
+      <button class="btn btn--sm btn--outline" id="add-stock-tab">${icon('plus', { size: 14 })} Add Stock</button></div>` : ''}
     <div class="table-wrap"><table class="table table--compact">
-      <thead><tr><th>Branch</th><th>Variant</th><th class="num">On hand</th><th class="num">Available</th><th class="num">Min</th><th>Status</th></tr></thead>
+      <thead><tr><th>Branch</th><th>Variant</th><th class="num">On hand</th><th class="num">Available</th><th>Status</th></tr></thead>
       <tbody>${rows.map((r) => `<tr><td>${escapeHtml(r.branch)}</td><td>${escapeHtml(r.variantLabel || '—')}</td>
-        <td class="num">${r.quantity}</td><td class="num">${r.available}</td><td class="num">${r.minStock}</td><td>${statusBadge(r.status)}</td></tr>`).join('') || '<tr><td colspan="6" class="muted">No stock records.</td></tr>'}</tbody>
+        <td class="num">${r.quantity}</td><td class="num">${r.available}</td><td>${statusBadge(r.status)}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">No stock records.</td></tr>'}</tbody>
     </table></div>`;
+    el.querySelector('#add-stock-tab')?.addEventListener('click', () => openAddStock());
+  }
+
+  function openAddStock() {
+    const branches = (store.get('branches') || []).filter((b) => !b.archivedAt);
+    if (!branches.length) { toast.error('No branches available.'); return; }
+    const hasVariants = !!product.variants?.length;
+    const m = openModal({ title: `Add Stock — ${product.name}`, size: 'sm', body: '<div></div>' });
+    createForm(m.$('.modal__body'), {
+      fields: [
+        { name: 'branchId', label: 'Branch', type: 'select', required: true,
+          options: branches.map((b) => ({ value: b.id, label: b.name })),
+          value: store.get('activeBranchId') || branches[0].id },
+        hasVariants && { name: 'variantId', label: 'Variant', type: 'select', required: true,
+          options: product.variants.map((v) => ({ value: v.id, label: v.name || v.sku })) },
+        { name: 'qty', label: 'Quantity to add', type: 'number', required: true, min: 1, step: 1, hint: `Adds to the selected branch's on-hand stock` },
+        { name: 'note', label: 'Note', placeholder: 'e.g. supplier delivery' },
+      ].filter(Boolean),
+      submitLabel: 'Add Stock',
+      onCancel: () => m.close(),
+      onSubmit: async (v) => {
+        const qty = Math.trunc(Number(v.qty) || 0);
+        if (qty <= 0) { toast.error('Quantity must be at least 1.'); return; }
+        try {
+          await inventoryService.adjustStock({
+            branchId: v.branchId,
+            reason: 'manual',
+            note: v.note || 'Stock added from product page',
+            lines: [{ productId: product.id, variantId: v.variantId || null, deltaQty: qty, note: v.note || 'Add stock' }],
+          });
+          m.close();
+          toast.success(`Added ${qty} to stock`);
+          if (stockPanel) renderStock(stockPanel);
+        } catch (err) {
+          toast.fromError(err);
+        }
+      },
+    });
   }
 
   async function renderMovements(el) {

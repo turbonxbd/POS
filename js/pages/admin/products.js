@@ -27,6 +27,7 @@ export default async function productsPage(ctx, mount) {
     title: 'Products',
     subtitle: 'Your sellable catalog. Archived products keep all sales history.',
     actions: [
+      can('barcode.manage') && { label: 'Generate Barcode', icon: 'barcode', variant: 'outline', href: '#/barcodes' },
       can('products.import') && { label: 'Import', icon: 'upload', variant: 'outline', onClick: importCsv },
       can('products.import') && { label: 'Export', icon: 'download', variant: 'outline', onClick: exportAll },
       can('products.create') && { label: 'New Product', icon: 'plus', variant: 'primary', href: '#/products/new' },

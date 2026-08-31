@@ -127,6 +127,34 @@ for (const [name, path, ctx] of [
   } catch (e) { T(name, false, 'THREW: ' + e.message); }
 }
 
+// product-detail: the "Add Stock" flow adds to a branch's on-hand quantity
+{
+  errs.length = 0;
+  mount.replaceChildren();
+  const { db } = await import(R + 'js/core/db.js');
+  const prod = db.collection('products').all().find((p) => p.trackInventory !== false && !p.archivedAt && !(p.variants || []).length) || aProd;
+  const before = db.collection('stock').all().reduce((s, r) => s + (r.productId === prod.id ? r.quantity : 0), 0);
+  const mod = await import(R + 'js/pages/admin/product-detail.js');
+  await mod.default({ params: { id: prod.id }, query: {} }, mount);
+  await sleep(80);
+  const addBtn = [...mount.querySelectorAll('button, a')].find((b) => /add stock/i.test(b.textContent));
+  T('product-detail: an "Add Stock" action is shown', !!addBtn, mount.querySelector('#page-actions')?.textContent);
+  if (addBtn) {
+    addBtn.click();
+    await sleep(60);
+    const form = document.querySelector('.overlay form, .modal form');
+    const f = (n) => form?.querySelector(`[name="${n}"]`);
+    f('qty').value = '7';
+    f('qty').dispatchEvent(new window.Event('input', { bubbles: true }));
+    (form.querySelector('button[type="submit"]') || form.querySelector('.btn--primary')).click();
+    await sleep(300);
+    const after = db.collection('stock').all().reduce((s, r) => s + (r.productId === prod.id ? r.quantity : 0), 0);
+    T('product-detail: Add Stock increases on-hand by the entered quantity', after === before + 7, `${before} -> ${after}`);
+  } else {
+    T('product-detail: Add Stock increases on-hand by the entered quantity', true, 'no button — skipped');
+  }
+}
+
 // POS
 errs.length = 0;
 const posMount = document.getElementById('pos-root');
