@@ -43,6 +43,7 @@ export function openPayment({ total, customer }) {
     const amounts = Object.fromEntries(METHODS.map((mt) => [mt.id, 0]));
     let cashReceived = 0;
     let settled = false;
+    let onAccount = false;
 
     const m = openModal({
       title: 'Take Payment',
@@ -57,6 +58,7 @@ export function openPayment({ total, customer }) {
           <label class="switch"><input type="checkbox" class="js-mixed"><span class="switch__track"><span class="switch__thumb"></span></span><span>Split / mixed payment</span></label>
           ${customer ? `<span class="badge badge--brand">${escapeHtml(customer.name)}</span>` : ''}
         </div>
+        ${customer ? `<label class="switch" style="grid-column:1/-1"><input type="checkbox" class="js-account"><span class="switch__track"><span class="switch__thumb"></span></span><span>Charge the remainder to ${escapeHtml(customer.name)}'s account (due)</span></label>` : ''}
         <div class="pay-method-grid js-methods">
           ${METHODS.map((mt) => `<button type="button" class="pay-method ${mt.id === 'cash' ? 'is-active' : ''}" data-m="${mt.id}">${icon(mt.icon, { size: 20 })}${mt.label}</button>`).join('')}
         </div>
@@ -127,6 +129,7 @@ export function openPayment({ total, customer }) {
 
     $('.js-cash-received').addEventListener('input', recalc);
     m.$$('.js-mix').forEach((i) => i.addEventListener('input', recalc));
+    $('.js-account')?.addEventListener('change', (e) => { onAccount = e.target.checked; recalc(); });
 
     function recalc() {
       let paid = 0;
@@ -148,14 +151,16 @@ export function openPayment({ total, customer }) {
       const box = $('.js-change');
       if (short > 0) {
         box.classList.add('is-due');
-        box.querySelector('span').textContent = 'Still due';
+        box.querySelector('span').textContent = onAccount ? 'Goes on account' : 'Still due';
         $('.js-change-amt').textContent = money.format(short);
       } else {
         box.classList.remove('is-due');
         box.querySelector('span').textContent = 'Change due';
         $('.js-change-amt').textContent = money.format(change);
       }
-      $('.js-confirm').disabled = short > 0.0001;
+      // on-account sales may be short (the shortfall becomes the customer's due);
+      // they still need at least a customer, which is guaranteed by the toggle.
+      $('.js-confirm').disabled = short > 0.0001 && !onAccount;
     }
 
     $('.js-cancel').addEventListener('click', () => m.close());
@@ -167,12 +172,16 @@ export function openPayment({ total, customer }) {
           if (v > 0) payments.push(toRecord(mt.id, v));
         }
       } else if (method === 'cash') {
-        payments.push(toRecord('cash', cashReceived));
-      } else {
+        // on a due sale the cashier may take partial cash now, rest on account
+        const amt = onAccount ? Math.min(cashReceived, total) : cashReceived;
+        if (amt > 0 || !onAccount) payments.push(toRecord('cash', amt));
+      } else if (!onAccount) {
         payments.push(toRecord(method, total, $('.js-ref').value));
       }
+      // (on-account + a non-cash tender records nothing now — the whole amount
+      //  becomes the customer's due; use cash or split to record a part-payment)
       settled = true;
-      resolve(payments);
+      resolve({ payments: payments.filter((p) => p.amount > 0 || !onAccount), onAccount });
       m.close();
     });
 

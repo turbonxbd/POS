@@ -33,9 +33,52 @@ export default async function saleDetailPage(ctx, mount) {
     breadcrumb: [{ label: 'Sales', href: '#/sales' }, { label: sale.invoiceNo }],
     actions: [
       { label: 'Print Receipt', icon: 'print', variant: 'outline', onClick: () => print() },
-      can('sales.refund') && sale.status !== 'refunded' && { label: 'Return / Refund', icon: 'undo', variant: 'primary', onClick: openReturn },
+      can('sales.create') && (sale.dueTotal || 0) > 0 && { label: 'Record Payment', icon: 'banknote', variant: 'primary', onClick: openDuePayment },
+      can('sales.refund') && sale.status !== 'refunded' && { label: 'Return / Refund', icon: 'undo', variant: (sale.dueTotal || 0) > 0 ? 'outline' : 'primary', onClick: openReturn },
     ].filter(Boolean),
   });
+
+  function openDuePayment() {
+    const due = sale.dueTotal || 0;
+    const m = openModal({
+      title: `Record a payment — ${sale.invoiceNo}`,
+      size: 'sm',
+      body: `<div class="stack" style="--stack-gap:var(--sp-3)">
+        <div class="alert alert--info"><div class="alert__body text-sm"><strong>${money.format(due)}</strong> is still due${sale.customerName ? ` from ${escapeHtml(sale.customerName)}` : ''}.</div></div>
+        <label class="field"><span class="label">Amount received</span>
+          <input class="input js-amt" type="number" min="1" step="0.01" value="${money.toMajor(due)}"></label>
+        <label class="field"><span class="label">Method</span>
+          <select class="select js-method">
+            <option value="cash">Cash</option><option value="bkash">bKash</option><option value="nagad">Nagad</option>
+            <option value="rocket">Rocket</option><option value="bank_transfer">Bank</option><option value="card">Card</option>
+          </select></label>
+        <label class="field"><span class="label">Reference / note <span class="opt">optional</span></span>
+          <input class="input js-note" placeholder="txn ID, receipt no…"></label>
+      </div>`,
+      footer: `<button class="btn btn--ghost js-cancel">Cancel</button><button class="btn btn--primary js-ok">Record payment</button>`,
+    });
+    m.$('.js-cancel').addEventListener('click', () => m.close());
+    m.$('.js-ok').addEventListener('click', async () => {
+      const amount = money.toMinor(m.$('.js-amt').value);
+      if (amount <= 0 || amount > due) { toast.error(`Enter an amount between ৳1 and ${money.format(due)}.`); return; }
+      m.setBusy(true);
+      try {
+        const method = m.$('.js-method').value;
+        sale = await salesService.collectDuePayment(sale.id, { amount, method, note: m.$('.js-note').value.trim() });
+        m.close();
+        toast.success('Payment recorded');
+        shell.setActions([
+          { label: 'Print Receipt', icon: 'print', variant: 'outline', onClick: () => print() },
+          can('sales.create') && (sale.dueTotal || 0) > 0 && { label: 'Record Payment', icon: 'banknote', variant: 'primary', onClick: openDuePayment },
+          can('sales.refund') && sale.status !== 'refunded' && { label: 'Return / Refund', icon: 'undo', variant: 'outline', onClick: openReturn },
+        ].filter(Boolean));
+        render();
+      } catch (err) {
+        m.setBusy(false);
+        toast.fromError(err);
+      }
+    });
+  }
 
   render();
 

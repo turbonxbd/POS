@@ -223,6 +223,38 @@ test('checkout: fixed-amount VAT adds a flat fee to every sale', function () {
     expect_eq($sale2['body']['grandTotal'], 10000);
 });
 
+test('checkout: due (credit) sale + record a later payment', function () {
+    $kit = new TestKit();
+    $s = $kit->loginAs();
+    $p = mkProduct($kit, $s, 'Due Item', 'DUE-1', '2000000009031', 4000, 10000, 20);
+    $cust = authed($kit, $s, 'POST', '/api/customers', ['json' => ['name' => 'Credit Buyer', 'phone' => '01799990001']])['body'];
+
+    $sale = authed($kit, $s, 'POST', '/api/sales', ['json' => [
+        'branchId' => $kit->branchId, 'customerId' => $cust['id'], 'onAccount' => true,
+        'items' => [['productId' => $p['id'], 'qty' => 3]],
+        'payments' => [['method' => 'cash', 'amount' => 10000]],
+    ]]);
+    expect_eq($sale['status'], 201, json_encode($sale['body']));
+    expect_eq($sale['body']['dueTotal'], 20000);
+    expect_eq($sale['body']['status'], 'due');
+    expect_eq(authed($kit, $s, 'GET', '/api/customers/' . $cust['id'], [])['body']['outstandingBalance'], 20000);
+
+    $pay1 = authed($kit, $s, 'POST', '/api/sales/' . $sale['body']['id'] . '/payment', ['json' => ['amount' => 12000, 'method' => 'cash']]);
+    expect_eq($pay1['status'], 200, json_encode($pay1['body']));
+    expect_eq($pay1['body']['dueTotal'], 8000);
+    expect_eq(authed($kit, $s, 'GET', '/api/customers/' . $cust['id'], [])['body']['outstandingBalance'], 8000);
+
+    // over-payment rejected
+    expect_eq(authed($kit, $s, 'POST', '/api/sales/' . $sale['body']['id'] . '/payment', ['json' => ['amount' => 99999]])['status'], 422);
+
+    $pay2 = authed($kit, $s, 'POST', '/api/sales/' . $sale['body']['id'] . '/payment', ['json' => ['amount' => 8000, 'method' => 'bkash', 'reference' => 'BK-1']]);
+    expect_eq($pay2['body']['dueTotal'], 0);
+    expect_eq($pay2['body']['status'], 'completed');
+
+    $hist = authed($kit, $s, 'GET', '/api/customers/' . $cust['id'] . '/history', [])['body'];
+    expect(count($hist['ledger']) >= 2); // sale_due + payments
+});
+
 test('held sales: hold then discard', function () {
     $kit = new TestKit();
     $s = $kit->loginAs();

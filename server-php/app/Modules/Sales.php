@@ -37,6 +37,7 @@ final class Sales
         $r->get('/sales/lookup', fn (Context $c) => self::lookup($c));
         $r->get('/sales/:id', fn (Context $c, $p) => self::show($c, $p));
         $r->post('/sales', fn (Context $c) => self::checkout($c));
+        $r->post('/sales/:id/payment', fn (Context $c, $p) => self::duePayment($c, $p));
 
         $r->get('/held-sales', fn (Context $c) => self::listHeld($c));
         $r->post('/held-sales', fn (Context $c) => self::hold($c));
@@ -92,6 +93,67 @@ final class Sales
         $sale = $ctx->repo()->findDoc('sales', 'LOWER(invoice_no) = :n', [':n' => strtolower($invoice)])
             ?? throw HttpError::notFound('Invoice');
         return Response::json(self::decorate($ctx, $sale));
+    }
+
+    /** Collect a payment against a due (credit) sale. */
+    private static function duePayment(Context $ctx, array $p): Response
+    {
+        $ctx->requirePermission('sales.create');
+        $sale = $ctx->repo()->doc('sales', $p['id']) ?? throw HttpError::notFound('Sale');
+        $due = (int) ($sale['dueTotal'] ?? 0);
+        if ($due <= 0) {
+            throw HttpError::badRequest('This sale has no outstanding balance.');
+        }
+        $b = $ctx->body();
+        $amount = (int) ($b['amount'] ?? 0);
+        if ($amount <= 0) {
+            throw HttpError::badRequest('Enter an amount greater than zero.');
+        }
+        if ($amount > $due) {
+            throw HttpError::badRequest('The amount cannot exceed the ' . Money::format($due) . ' still due.');
+        }
+        $method = $b['method'] ?? 'cash';
+
+        return $ctx->db->transaction(function () use ($ctx, $sale, $due, $amount, $method, $b) {
+            $now = Clock::now();
+            $reg = $ctx->repo()->findDoc('register_sessions', "branch_id = :b AND status = 'open'", [':b' => $sale['branchId']]);
+            $pid = Uuid::v4();
+            $ctx->repo()->insert('payments', $pid, [
+                'id' => $pid, 'saleId' => $sale['id'], 'branchId' => $sale['branchId'], 'registerSessionId' => $reg['id'] ?? null,
+                'direction' => 'in', 'method' => $method,
+                'provider' => $b['provider'] ?? (in_array($method, ['bkash', 'nagad', 'rocket', 'other'], true) ? $method : null),
+                'amount' => $amount, 'reference' => isset($b['reference']) ? mb_substr((string) $b['reference'], 0, 40) : null,
+                'note' => $b['note'] ?? 'Due payment', 'at' => $now,
+            ], ['sale_id' => $sale['id'], 'branch_id' => $sale['branchId'], 'register_session_id' => $reg['id'] ?? null, 'direction' => 'in', 'method' => $method, 'amount' => $amount, 'at' => $now]);
+
+            $nextDue = $due - $amount;
+            $ctx->repo()->update('sales', $sale['id'], [
+                'paidTotal' => (int) ($sale['paidTotal'] ?? 0) + $amount,
+                'dueTotal' => $nextDue,
+                'status' => $nextDue <= 0 && ($sale['status'] ?? '') === 'due' ? 'completed' : ($sale['status'] ?? 'completed'),
+            ], $nextDue <= 0 && ($sale['status'] ?? '') === 'due' ? ['status' => 'completed'] : []);
+
+            if (!empty($sale['customerId'])) {
+                $cust = $ctx->repo()->doc('customers', $sale['customerId']);
+                if ($cust) {
+                    $ctx->repo()->update('customers', $sale['customerId'], ['outstandingBalance' => max(0, (int) ($cust['outstandingBalance'] ?? 0) - $amount)]);
+                }
+                $lid = Uuid::v4();
+                $ctx->repo()->insert('customer_ledger', $lid, [
+                    'id' => $lid, 'customerId' => $sale['customerId'], 'type' => 'payment', 'refType' => 'sale', 'refId' => $sale['id'],
+                    'amount' => $amount, 'balanceDelta' => -$amount, 'note' => $b['note'] ?? ('Payment for ' . $sale['invoiceNo']), 'at' => $now,
+                ], ['customer_id' => $sale['customerId'], 'type' => 'payment', 'ref_type' => 'sale', 'ref_id' => $sale['id'], 'amount' => $amount, 'at' => $now]);
+            }
+
+            Audit::record($ctx, 'update', 'sale', $sale['id'], ['meta' => ['action' => 'due_payment', 'amount' => $amount, 'invoiceNo' => $sale['invoiceNo']]]);
+            Notify::push($ctx, 'sale', 'Due payment received', Money::format($amount) . ' against ' . $sale['invoiceNo'] . ($nextDue > 0 ? ' — ' . Money::format($nextDue) . ' still due' : ' — fully paid'), ['level' => 'success', 'link' => '#/sales/' . $sale['id']]);
+
+            $fresh = $ctx->repo()->doc('sales', $sale['id']);
+            return Response::json(array_merge(self::decorate($ctx, $fresh), [
+                'items' => $ctx->repo()->allDocs('sale_items', 'sale_id = :s', [':s' => $sale['id']], 'created_at ASC'),
+                'payments' => $ctx->repo()->allDocs('payments', 'sale_id = :s', [':s' => $sale['id']], 'created_at ASC'),
+            ]));
+        });
     }
 
     private static function show(Context $ctx, array $p): Response

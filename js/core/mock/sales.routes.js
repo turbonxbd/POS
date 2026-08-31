@@ -170,6 +170,52 @@ export default function register(router) {
     });
   });
 
+  /* --------------------------------- COLLECT PAYMENT ON A DUE SALE */
+  router.post('/sales/:id/payment', ({ params, body }) => {
+    const sale = tdb('sales').get(params.id);
+    if (!sale) notFound('Sale');
+    const due = sale.dueTotal || 0;
+    if (due <= 0) badRequest('This sale has no outstanding balance.');
+    const amount = Math.trunc(Number(body?.amount) || 0);
+    if (amount <= 0) badRequest('Enter an amount greater than zero.');
+    if (amount > due) badRequest(`The amount cannot exceed the ${money.format(due)} still due.`);
+    const method = body?.method || 'cash';
+
+    return db.tx(() => {
+      const branch = tdb('branches').get(sale.branchId);
+      const openReg = tdb('register_sessions').findOne((s) => s.branchId === sale.branchId && s.status === 'open')?.id || null;
+      tdb('payments').insert({
+        id: uuid(), saleId: sale.id, branchId: sale.branchId, registerSessionId: openReg,
+        direction: 'in', method: method === 'mobile' ? 'mobile' : method,
+        provider: body?.provider || (['bkash', 'nagad', 'rocket', 'other'].includes(method) ? method : null),
+        amount, reference: body?.reference ? String(body.reference).slice(0, 40) : null,
+        note: body?.note || 'Due payment', at: now(),
+      });
+      const nextDue = due - amount;
+      const paidTotal = (sale.paidTotal || 0) + amount;
+      tdb('sales').update(sale.id, {
+        paidTotal, dueTotal: nextDue,
+        status: nextDue <= 0 && sale.status === 'due' ? 'completed' : sale.status,
+      });
+      if (sale.customerId) {
+        tdb('customers').update(sale.customerId, (c) => ({ outstandingBalance: Math.max(0, (c.outstandingBalance || 0) - amount) }));
+        tdb('customer_ledger').insert({
+          id: uuid(), customerId: sale.customerId, type: 'payment', refType: 'sale', refId: sale.id,
+          amount, balanceDelta: -amount, note: body?.note || `Payment for ${sale.invoiceNo}`, at: now(),
+        });
+      }
+      audit('update', 'sale', sale.id, { meta: { action: 'due_payment', amount, invoiceNo: sale.invoiceNo } });
+      notify('sale', 'Due payment received', `${money.format(amount)} against ${sale.invoiceNo}${nextDue > 0 ? ` — ${money.format(nextDue)} still due` : ' — fully paid'}${branch ? ` @ ${branch.name}` : ''}`, {
+        level: 'success', link: `#/sales/${sale.id}`,
+      });
+      return ok({
+        ...decorateSale(tdb('sales').get(sale.id)),
+        items: tdb('sale_items').find({ saleId: sale.id }),
+        payments: tdb('payments').find({ saleId: sale.id }),
+      });
+    });
+  });
+
   /* -------------------------------------------------------- CREATE SALE */
   router.post('/sales', ({ body }) => {
     const b = body || {};

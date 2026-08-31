@@ -6,7 +6,7 @@ import db from '../db.js';
 import { tdb, currentMerchantId, isLegacyMode } from './scope.js';
 import { ok, created, notFound, badRequest, conflict, applyListQuery } from './router.js';
 import { defineResource } from './resource.js';
-import { audit } from './helpers.js';
+import { audit, resolveBranchId } from './helpers.js';
 import { getActor } from './context.js';
 import { hashPassword } from '../../utils/crypto.js';
 import { uuid } from '../../utils/id.js';
@@ -62,14 +62,28 @@ export default function register(router) {
     const customer = tdb('customers').get(params.id);
     if (!customer) notFound('Customer');
     const delta = Math.trunc(body?.amount || 0);
-    const type = body?.type === 'payment' ? -Math.abs(delta) : delta;
+    if (delta <= 0) badRequest('Enter an amount greater than zero.');
+    const isPayment = body?.type === 'payment';
+    const balanceDelta = isPayment ? -delta : delta;
     return db.tx(() => {
       tdb('customer_ledger').insert({
         id: uuid(), customerId: params.id, type: body?.type || 'adjustment', refType: 'manual', refId: null,
-        amount: Math.abs(delta), balanceDelta: type, note: body?.note || '', at: now(),
+        amount: delta, balanceDelta, note: body?.note || (isPayment ? 'Payment received' : 'Balance adjustment'), at: now(),
       });
-      const row = tdb('customers').update(params.id, (c) => ({ outstandingBalance: Math.max(0, (c.outstandingBalance || 0) + type) }));
-      audit('update', 'customer', params.id, { meta: { field: 'balance', delta: type } });
+      // a payment against outstanding balance is real cash in — record it so the
+      // register + payment reports see it
+      if (isPayment) {
+        const branchId = resolveBranchId();
+        const openReg = tdb('register_sessions').findOne((s) => s.branchId === branchId && s.status === 'open')?.id || null;
+        tdb('payments').insert({
+          id: uuid(), saleId: null, branchId, registerSessionId: openReg, direction: 'in',
+          method: body?.method || 'cash', provider: body?.provider || null, amount: delta,
+          reference: body?.reference ? String(body.reference).slice(0, 40) : null,
+          note: body?.note || `Payment from ${customer.name}`, refType: 'customer_payment', at: now(),
+        });
+      }
+      const row = tdb('customers').update(params.id, (c) => ({ outstandingBalance: Math.max(0, (c.outstandingBalance || 0) + balanceDelta) }));
+      audit('update', 'customer', params.id, { meta: { field: 'balance', delta: balanceDelta, kind: body?.type || 'adjustment' } });
       return ok(row);
     });
   });

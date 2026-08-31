@@ -8,6 +8,7 @@ use Afia\Context;
 use Afia\Http\Response;
 use Afia\Http\Router;
 use Afia\Support\Audit;
+use Afia\Support\Branch;
 use Afia\Support\Clock;
 use Afia\Support\HttpError;
 use Afia\Support\Password;
@@ -85,15 +86,34 @@ final class People
         $customer = $ctx->repo()->doc('customers', $p['id']) ?? throw HttpError::notFound('Customer');
         $b = $ctx->body();
         $delta = (int) ($b['amount'] ?? 0);
-        $signed = ($b['type'] ?? null) === 'payment' ? -abs($delta) : $delta;
-        return $ctx->db->transaction(function () use ($ctx, $p, $customer, $b, $delta, $signed) {
+        if ($delta <= 0) {
+            throw HttpError::badRequest('Enter an amount greater than zero.');
+        }
+        $isPayment = ($b['type'] ?? null) === 'payment';
+        $signed = $isPayment ? -$delta : $delta;
+        return $ctx->db->transaction(function () use ($ctx, $p, $customer, $b, $delta, $signed, $isPayment) {
             $lid = Uuid::v4();
+            $now = Clock::now();
+            $type = $b['type'] ?? 'adjustment';
             $ctx->repo()->insert('customer_ledger', $lid, [
-                'id' => $lid, 'customerId' => $p['id'], 'type' => $b['type'] ?? 'adjustment', 'refType' => 'manual', 'refId' => null,
-                'amount' => abs($delta), 'balanceDelta' => $signed, 'note' => $b['note'] ?? '', 'at' => Clock::now(),
-            ], ['customer_id' => $p['id'], 'type' => $b['type'] ?? 'adjustment', 'ref_type' => 'manual', 'ref_id' => null, 'amount' => abs($delta), 'at' => Clock::now()]);
+                'id' => $lid, 'customerId' => $p['id'], 'type' => $type, 'refType' => 'manual', 'refId' => null,
+                'amount' => $delta, 'balanceDelta' => $signed,
+                'note' => $b['note'] ?? ($isPayment ? 'Payment received' : 'Balance adjustment'), 'at' => $now,
+            ], ['customer_id' => $p['id'], 'type' => $type, 'ref_type' => 'manual', 'ref_id' => null, 'amount' => $delta, 'at' => $now]);
+            // a payment against outstanding balance is cash in — record it for the register + reports
+            if ($isPayment) {
+                $branch = Branch::require($ctx, null);
+                $reg = $ctx->repo()->findDoc('register_sessions', "branch_id = :b AND status = 'open'", [':b' => $branch['id']]);
+                $pid = Uuid::v4();
+                $ctx->repo()->insert('payments', $pid, [
+                    'id' => $pid, 'saleId' => null, 'branchId' => $branch['id'], 'registerSessionId' => $reg['id'] ?? null,
+                    'direction' => 'in', 'method' => $b['method'] ?? 'cash', 'provider' => $b['provider'] ?? null,
+                    'amount' => $delta, 'reference' => isset($b['reference']) ? mb_substr((string) $b['reference'], 0, 40) : null,
+                    'note' => $b['note'] ?? ('Payment from ' . ($customer['name'] ?? 'customer')), 'refType' => 'customer_payment', 'at' => $now,
+                ], ['sale_id' => null, 'branch_id' => $branch['id'], 'register_session_id' => $reg['id'] ?? null, 'direction' => 'in', 'method' => $b['method'] ?? 'cash', 'amount' => $delta, 'at' => $now]);
+            }
             $row = $ctx->repo()->update('customers', $p['id'], ['outstandingBalance' => max(0, ($customer['outstandingBalance'] ?? 0) + $signed)]);
-            Audit::record($ctx, 'update', 'customer', $p['id'], ['meta' => ['field' => 'balance', 'delta' => $signed]]);
+            Audit::record($ctx, 'update', 'customer', $p['id'], ['meta' => ['field' => 'balance', 'delta' => $signed, 'kind' => $type]]);
             return Response::json($row);
         });
     }

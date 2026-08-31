@@ -711,8 +711,13 @@ export async function renderPOS(mount, { onNeedRegister } = {}) {
       }
     }
 
-    const payments = await openPayment({ total: totals.grandTotal, customer: cart.customer });
-    if (!payments) return;
+    const pay = await openPayment({ total: totals.grandTotal, customer: cart.customer });
+    if (!pay) return;
+    const { payments, onAccount } = pay;
+    if (onAccount && !cart.customer) {
+      toast.error('Select a customer before charging to account.');
+      return;
+    }
 
     submitting = true;
     els.pay.classList.add('is-loading');
@@ -721,7 +726,7 @@ export async function renderPOS(mount, { onNeedRegister } = {}) {
     const idempotencyKey = uuid();
     try {
       const sale = await checkoutMutex(() =>
-        salesService.createSale({ ...cart.toDraft(), payments }, { idempotencyKey }),
+        salesService.createSale({ ...cart.toDraft(), payments, onAccount: !!onAccount }, { idempotencyKey }),
       );
       bus.emit('pos:sale-completed', sale);
       await onSaleComplete(sale);

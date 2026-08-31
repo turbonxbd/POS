@@ -22,6 +22,10 @@ export const salesService = {
     requirePermission('sales.view');
     return http.get(`/sales/${id}`);
   },
+  collectDuePayment(id, payload) {
+    requirePermission('sales.create');
+    return http.post(`/sales/${id}/payment`, payload);
+  },
   lookupByInvoice(invoiceNo) {
     requirePermission('sales.view');
     return http.get('/sales/lookup', { params: { invoice: invoiceNo } });

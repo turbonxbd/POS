@@ -244,6 +244,45 @@ await step('fixed-amount VAT', async () => {
   T('archived fixed VAT no longer applies', s2.grandTotal === 10000, String(s2.grandTotal));
 });
 
+// ---- credit / due sale + later payment ----
+await step('due sale + record payment', async () => {
+  setActor(login.user);
+  const cust = await http.post('/customers', { name: 'Credit Buyer', phone: '01799990000' });
+  const P = await http.post('/products', { branchId: B, name: 'QA Due Item', sellingPrice: 10000, costPrice: 4000, unit: 'pcs', openingStock: 20, minStock: 1 });
+
+  // 3 x 100 = 300; pay 100 cash now, 200 on account
+  const sale = await http.post('/sales', {
+    branchId: B, customerId: cust.id, onAccount: true,
+    items: [{ productId: P.id, qty: 3 }],
+    payments: [{ method: 'cash', amount: 10000 }],
+  });
+  T('due sale records the shortfall as dueTotal', sale.dueTotal === 20000 && sale.status === 'due', `${sale.dueTotal}/${sale.status}`);
+  T('due sale bumps the customer outstanding balance',
+    (await http.get('/customers/' + cust.id)).outstandingBalance === 20000);
+
+  // pay 120 later
+  const paid1 = await http.post('/sales/' + sale.id + '/payment', { amount: 12000, method: 'cash' });
+  T('recording a due payment reduces dueTotal', paid1.dueTotal === 8000, String(paid1.dueTotal));
+  T('and reduces the customer outstanding balance',
+    (await http.get('/customers/' + cust.id)).outstandingBalance === 8000);
+
+  // over-payment is rejected
+  let over = false;
+  try { await http.post('/sales/' + sale.id + '/payment', { amount: 99999 }); } catch (e) { over = e.status === 422; }
+  T('over-payment against a due sale is rejected', over);
+
+  // clear the rest -> sale completed
+  const paid2 = await http.post('/sales/' + sale.id + '/payment', { amount: 8000, method: 'bkash', reference: 'BK-DUE-1' });
+  T('paying the balance flips the sale back to completed', paid2.dueTotal === 0 && paid2.status === 'completed');
+
+  // a manual customer-balance payment records a payments row
+  const c2 = await http.post('/customers', { name: 'Opening Owed', phone: '01788880000', openingBalance: 5000 });
+  const paysBefore = db.collection('payments').count();
+  await http.post('/customers/' + c2.id + '/balance', { type: 'payment', amount: 2000, method: 'cash' });
+  T('a customer-balance payment lowers the balance', (await http.get('/customers/' + c2.id)).outstandingBalance === 3000);
+  T('a customer-balance payment records a cash-in payment row', db.collection('payments').count() === paysBefore + 1);
+});
+
 reconcile('(after all ops)');
 
 console.log('\n===== ' + pass + ' passed, ' + fail + ' failed =====');
