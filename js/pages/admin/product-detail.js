@@ -9,7 +9,6 @@ import { icon } from '../../components/icons.js';
 import { escapeHtml } from '../../utils/dom.js';
 import { renderBarcode } from '../../components/barcode.js';
 import { openModal } from '../../components/modal.js';
-import { createForm } from '../../components/form.js';
 import { toast } from '../../components/toast.js';
 import { fmtDateTime } from '../../utils/date.js';
 import money from '../../utils/money.js';
@@ -124,41 +123,102 @@ export default async function productDetailPage(ctx, mount) {
     el.querySelector('#add-stock-tab')?.addEventListener('click', () => openAddStock());
   }
 
+  /**
+   * Add Stock — one modal for every branch at once. If the product has
+   * variants, each branch lists every variant with its own quantity box; a
+   * plain product gets one box per branch. On submit it posts one stock
+   * adjustment per branch (positive lines), refreshes the Stock tab, then
+   * shows a summary with a "Print N barcodes" shortcut into the Barcode
+   * Generator for exactly the units just added.
+   */
   function openAddStock() {
     const branches = (store.get('branches') || []).filter((b) => !b.archivedAt);
     if (!branches.length) { toast.error('No branches available.'); return; }
-    const hasVariants = !!product.variants?.length;
-    const m = openModal({ title: `Add Stock — ${product.name}`, size: 'sm', body: '<div></div>' });
-    createForm(m.$('.modal__body'), {
-      fields: [
-        { name: 'branchId', label: 'Branch', type: 'select', required: true,
-          options: branches.map((b) => ({ value: b.id, label: b.name })),
-          value: store.get('activeBranchId') || branches[0].id },
-        hasVariants && { name: 'variantId', label: 'Variant', type: 'select', required: true,
-          options: product.variants.map((v) => ({ value: v.id, label: v.name || v.sku })) },
-        { name: 'qty', label: 'Quantity to add', type: 'number', required: true, min: 1, step: 1, hint: `Adds to the selected branch's on-hand stock` },
-        { name: 'note', label: 'Note', placeholder: 'e.g. supplier delivery' },
-      ].filter(Boolean),
-      submitLabel: 'Add Stock',
-      onCancel: () => m.close(),
-      onSubmit: async (v) => {
-        const qty = Math.trunc(Number(v.qty) || 0);
-        if (qty <= 0) { toast.error('Quantity must be at least 1.'); return; }
-        try {
+    const variants = product.variants?.length ? product.variants : null;
+    const attrChips = ['color', 'size', 'variant']
+      .filter((k) => product.attributes?.[k]).map((k) => product.attributes[k]).join('  ·  ');
+
+    const m = openModal({ title: `Add Stock — ${product.name}`, size: 'md', body: '<div></div>' });
+    renderEntry();
+
+    function renderEntry() {
+      m.setBody(`
+        <p class="field-hint">Enter how many units to add per branch${variants ? ' and variant' : ''}. Leave a box blank to skip it.</p>
+        ${attrChips ? `<p class="text-sm muted" style="margin:-4px 0 var(--sp-2)">${escapeHtml(attrChips)}</p>` : ''}
+        <div class="addstock">
+          ${branches.map((b) => `
+            <div class="addstock__branch">
+              <div class="addstock__bname">${icon('building', { size: 14 })} ${escapeHtml(b.name)}</div>
+              ${(variants || [{ id: '', name: 'Quantity' }]).map((v) => `
+                <label class="addstock__row">
+                  <span>${escapeHtml(v.name || v.sku || 'Quantity')}</span>
+                  <input class="input js-as-qty" type="number" min="0" step="1" inputmode="numeric" placeholder="0"
+                    data-b="${b.id}" data-v="${v.id || ''}">
+                </label>`).join('')}
+            </div>`).join('')}
+        </div>
+        <label class="field" style="margin-top:var(--sp-3)"><span class="label">Note (optional)</span>
+          <input class="input js-as-note" placeholder="e.g. supplier delivery, stock count"></label>`);
+      m.setFooter(`
+        <button class="btn btn--ghost js-as-cancel">Cancel</button>
+        <button class="btn btn--primary js-as-submit">${icon('plus', { size: 15 })} Add Stock</button>`);
+      m.$('.js-as-cancel').addEventListener('click', () => m.close());
+      m.$('.js-as-submit').addEventListener('click', submit);
+      m.$('.js-as-qty')?.focus();
+    }
+
+    async function submit() {
+      const note = m.$('.js-as-note').value.trim();
+      const entries = m.$$('.js-as-qty')
+        .map((i) => ({ branchId: i.dataset.b, variantId: i.dataset.v || null, qty: Math.max(0, Math.trunc(Number(i.value) || 0)) }))
+        .filter((e) => e.qty > 0);
+      if (!entries.length) { toast.warning('Enter a quantity for at least one branch.'); return; }
+
+      m.setBusy(true);
+      try {
+        const byBranch = new Map();
+        entries.forEach((e) => {
+          if (!byBranch.has(e.branchId)) byBranch.set(e.branchId, []);
+          byBranch.get(e.branchId).push(e);
+        });
+        for (const [branchId, list] of byBranch) {
           await inventoryService.adjustStock({
-            branchId: v.branchId,
-            reason: 'manual',
-            note: v.note || 'Stock added from product page',
-            lines: [{ productId: product.id, variantId: v.variantId || null, deltaQty: qty, note: v.note || 'Add stock' }],
+            branchId, reason: 'manual', note: note || 'Stock added from product page',
+            lines: list.map((e) => ({ productId: product.id, variantId: e.variantId, deltaQty: e.qty, note: note || 'Add stock' })),
           });
-          m.close();
-          toast.success(`Added ${qty} to stock`);
-          if (stockPanel) renderStock(stockPanel);
-        } catch (err) {
-          toast.fromError(err);
         }
-      },
-    });
+        m.setBusy(false);
+        if (stockPanel) renderStock(stockPanel);
+        renderDone(entries);
+      } catch (err) {
+        m.setBusy(false);
+        toast.fromError(err);
+      }
+    }
+
+    function renderDone(entries) {
+      const total = entries.reduce((s, e) => s + e.qty, 0);
+      const bn = (id) => branches.find((b) => b.id === id)?.name || id;
+      const perBranch = [...new Set(entries.map((e) => e.branchId))]
+        .map((id) => `${escapeHtml(bn(id))} <b>+${entries.filter((e) => e.branchId === id).reduce((s, e) => s + e.qty, 0)}</b>`);
+      m.setBody(`
+        <div class="addstock-done">
+          <span class="addstock-done__ic">${icon('check-circle', { size: 34 })}</span>
+          <div class="strong" style="font-size:var(--fs-lg)">${total} unit${total === 1 ? '' : 's'} added to stock</div>
+          <p class="text-sm muted">${perBranch.join('  ·  ')}</p>
+        </div>`);
+      m.setFooter(`
+        <button class="btn btn--ghost js-as-again">${icon('plus', { size: 14 })} Add more</button>
+        <button class="btn btn--outline js-as-done">Done</button>
+        <button class="btn btn--primary js-as-print">${icon('barcode', { size: 15 })} Print ${total} barcode${total === 1 ? '' : 's'}</button>`);
+      m.$('.js-as-again').addEventListener('click', renderEntry);
+      m.$('.js-as-done').addEventListener('click', () => m.close());
+      m.$('.js-as-print').addEventListener('click', () => {
+        m.close();
+        location.hash = `#/barcodes?product=${product.id}&qty=${total}`;
+      });
+      toast.success(`Added ${total} to stock`);
+    }
   }
 
   async function renderMovements(el) {

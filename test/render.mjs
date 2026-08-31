@@ -142,16 +142,26 @@ for (const [name, path, ctx] of [
   if (addBtn) {
     addBtn.click();
     await sleep(60);
-    const form = document.querySelector('.overlay form, .modal form');
-    const f = (n) => form?.querySelector(`[name="${n}"]`);
-    f('qty').value = '7';
-    f('qty').dispatchEvent(new window.Event('input', { bubbles: true }));
-    (form.querySelector('button[type="submit"]') || form.querySelector('.btn--primary')).click();
-    await sleep(300);
+    const modal = document.querySelector('.overlay .modal, .modal');
+    const qtyInputs = [...modal.querySelectorAll('.js-as-qty')];
+    T('product-detail: Add Stock lists a box per branch', qtyInputs.length >= 1, String(qtyInputs.length));
+    // add to every branch box (2 units each)
+    let expectAdded = 0;
+    for (const inp of qtyInputs) {
+      inp.value = '2';
+      inp.dispatchEvent(new window.Event('input', { bubbles: true }));
+      expectAdded += 2;
+    }
+    modal.querySelector('.js-as-submit').click();
+    await sleep(400);
     const after = db.collection('stock').all().reduce((s, r) => s + (r.productId === prod.id ? r.quantity : 0), 0);
-    T('product-detail: Add Stock increases on-hand by the entered quantity', after === before + 7, `${before} -> ${after}`);
+    T('product-detail: Add Stock adds to every branch at once', after === before + expectAdded, `${before} +${expectAdded} -> ${after}`);
+    const printBtn = [...document.querySelectorAll('.overlay .modal button, .modal button')].find((b) => /print .*barcode/i.test(b.textContent));
+    T('product-detail: the success step offers a "Print barcodes" shortcut', !!printBtn, printBtn?.textContent?.trim());
   } else {
-    T('product-detail: Add Stock increases on-hand by the entered quantity', true, 'no button — skipped');
+    T('product-detail: Add Stock lists a box per branch', true, 'no button — skipped');
+    T('product-detail: Add Stock adds to every branch at once', true, 'skipped');
+    T('product-detail: the success step offers a "Print barcodes" shortcut', true, 'skipped');
   }
 }
 

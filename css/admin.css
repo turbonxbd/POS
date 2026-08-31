@@ -398,6 +398,31 @@
 .billing-h3 { margin: var(--sp-5) 0 var(--sp-2); font-size: var(--fs-md); font-weight: var(--fw-bold); }
 .billing-h3:first-child { margin-top: 0; }
 
+/* ---- Add Stock modal (product-detail.js) ---- */
+.addstock {
+  display: grid; gap: var(--sp-3);
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+.addstock__branch {
+  border: 1px solid var(--border); border-radius: var(--radius-md);
+  padding: var(--sp-3); background: var(--bg-surface-2, var(--bg-surface));
+}
+.addstock__bname {
+  display: flex; align-items: center; gap: 6px;
+  font-weight: var(--fw-bold); font-size: var(--fs-sm);
+  padding-bottom: var(--sp-2); margin-bottom: var(--sp-2);
+  border-bottom: 1px solid var(--border-subtle, var(--border));
+}
+.addstock__row {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2);
+  padding: 4px 0; font-size: var(--fs-sm);
+}
+.addstock__row > span { color: var(--text-secondary); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.addstock__row .input { width: 88px; text-align: right; font-variant-numeric: tabular-nums; }
+.addstock-done { text-align: center; padding: var(--sp-4) var(--sp-2); }
+.addstock-done__ic { color: var(--success-solid, var(--success-fg)); display: inline-block; }
+.addstock-done .strong { margin-top: var(--sp-2); }
+
 .sub-countdown {
   display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-4);
   padding: var(--sp-4) var(--sp-5);
