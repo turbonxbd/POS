@@ -687,6 +687,20 @@ export async function renderPOS(mount, { onNeedRegister } = {}) {
     if (submitting || cart.isEmpty) return;
     const totals = cart.compute();
 
+    // Re-check the coupon against the real (post-line-discount) base BEFORE any
+    // money is taken — the server validates on that base at createSale and would
+    // otherwise reject the sale after the drawer is open.
+    if (cart.coupon) {
+      const code = cart.coupon.code;
+      const base = totals.subtotal - (totals.itemDiscountTotal || 0);
+      const res = await discountService.validateCoupon(code, base).catch(() => null);
+      if (!res || !res.valid) {
+        cart.clearCoupon();
+        toast.warning(`Coupon ${code} is no longer valid — it has been removed. Check the total and try again.`);
+        return;
+      }
+    }
+
     if (settings.pos?.requireOpenRegister) {
       // quick check via service; onNeedRegister lets shell open the register modal
       const { cashRegisterService } = await import('../../services/cash-register-service.js');

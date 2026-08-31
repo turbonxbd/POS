@@ -42,7 +42,12 @@ function normalize(body, existing) {
   if (Array.isArray(b.features)) out.features = b.features.map(String);
   if (b.limits && typeof b.limits === 'object') out.limits = b.limits;
   if (b.popular != null) out.popular = !!b.popular;
-  if (b.status && ['active', 'archived'].includes(b.status)) out.status = b.status;
+  if (b.status && ['active', 'archived'].includes(b.status)) {
+    out.status = b.status;
+    // setting a plan back to Active un-archives it (else activePlans() still hides it)
+    if (b.status === 'active') out.archivedAt = null;
+    else if (b.status === 'archived' && !out.archivedAt) out.archivedAt = now();
+  }
   if (b.sortOrder != null) out.sortOrder = Math.trunc(Number(b.sortOrder) || 0);
   out.currency = out.currency || 'BDT';
   out.currencySymbol = out.currencySymbol || '৳';

@@ -23,13 +23,14 @@ export default function register(router) {
     if (!businessName) errors.businessName = 'Required';
     if (!isEmail(email)) errors.email = 'Enter a valid email';
     if (password.length < 8) errors.password = 'Use at least 8 characters';
-    if (Object.keys(errors).length) badRequest('Please fix the highlighted fields', errors);
 
     let planId = b.planId || null;
-    if (planId) {
-      const plan = db.collection('plans').get(planId);
-      if (!plan || plan.status !== 'active') planId = null;
+    const plan = planId ? db.collection('plans').get(planId) : null;
+    if (!plan || plan.status !== 'active' || plan.archivedAt) {
+      errors.planId = 'Choose a plan';
+      planId = null;
     }
+    if (Object.keys(errors).length) badRequest('Please fix the highlighted fields', errors);
 
     return db.tx(async () => {
       let res;

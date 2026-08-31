@@ -35,18 +35,16 @@ final class Signup
         $business = trim((string) ($b['businessName'] ?? ''));
         $email = strtolower(trim((string) ($b['email'] ?? '')));
         $password = (string) ($b['password'] ?? '');
+        $planId = $b['planId'] ?? null;
+        $planOk = $planId && $ctx->db->first("SELECT 1 FROM plans WHERE id = :id AND status = 'active' AND archived_at IS NULL", [':id' => $planId]);
         $errors = array_filter([
             'businessName' => $business === '' ? 'Required' : null,
             'email' => !filter_var($email, FILTER_VALIDATE_EMAIL) ? 'Enter a valid email' : null,
             'password' => strlen($password) < 8 ? 'Use at least 8 characters' : null,
+            'planId' => $planOk ? null : 'Choose a plan',
         ]);
         if ($errors) {
             throw HttpError::badRequest('Please fix the highlighted fields', $errors);
-        }
-
-        $planId = $b['planId'] ?? null;
-        if ($planId && !$ctx->db->first("SELECT 1 FROM plans WHERE id = :id AND status = 'active'", [':id' => $planId])) {
-            $planId = null; // ignore an unknown/inactive plan rather than fail signup
         }
 
         try {

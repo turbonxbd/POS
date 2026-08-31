@@ -210,18 +210,31 @@ function openSignup(planId, plans) {
     subtitle: chosen ? planLabel(chosen) : 'Start with any plan — change it any time',
     size: 'md', body: '<div></div>',
   });
-  createForm(m.$('.modal__body'), {
+  const sellable = (plans || []).filter((p) => p.status !== 'archived');
+  if (!sellable.length) {
+    m.setBody('<div class="alert alert--warning"><div class="alert__body">Plans are still loading — please refresh and try again, or message us on WhatsApp.</div></div>');
+    return;
+  }
+  const form = createForm(m.$('.modal__body'), {
     fields: [
       { name: 'businessName', label: 'Business name', required: true },
       { name: 'ownerName', label: 'Your name' },
       { name: 'email', label: 'Email', type: 'email', required: true },
       { name: 'password', label: 'Choose a password', type: 'password', required: true, rules: [['minLength', 8]], hint: 'At least 8 characters' },
-      { name: 'planId', label: 'Plan', type: 'select', value: planId || (plans[0] && plans[0].id) || '', options: plans.map((p) => ({ value: p.id, label: planLabel(p) })) },
+      { name: 'planId', label: 'Plan', type: 'select', required: true, placeholder: 'Choose a plan…',
+        value: (planId && sellable.some((p) => p.id === planId)) ? planId : (sellable[0]?.id || ''),
+        options: sellable.map((p) => ({ value: p.id, label: planLabel(p) })) },
     ],
     submitLabel: 'Create account & open my dashboard',
     onCancel: () => m.close(),
     onSubmit: async (v) => {
-      await http.post('/signup', v);
+      if (!v.planId) { form.setError('planId', 'Choose a plan'); return; }
+      try {
+        await http.post('/signup', v);
+      } catch (err) {
+        if (err?.data?.errors) { Object.entries(err.data.errors).forEach(([f, msg]) => form.setError(f, msg)); return; }
+        throw err;
+      }
       // establish the session, then collect the plan's setup payment right here
       await session.login(v.email.trim().toLowerCase(), v.password);
       m.close();

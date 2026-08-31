@@ -20,6 +20,7 @@ export default async function salesPage(ctx, mount) {
   const strip = document.createElement('div');
   const tableMount = document.createElement('div');
   shell.body.append(strip, tableMount);
+  let lastParams = {};
 
   createDataTable(tableMount, {
     columns: [
@@ -46,6 +47,7 @@ export default async function salesPage(ctx, mount) {
     stacked: true,
     emptyState: { icon: 'receipt', title: 'No sales in this period' },
     fetcher: async (params) => {
+      lastParams = params;
       const range = resolveRange(params.preset || 'this_month');
       const res = await salesService.getSales({ ...params, from: range.from, to: range.to });
       const t = res.totals || {};
@@ -63,8 +65,10 @@ export default async function salesPage(ctx, mount) {
   });
 
   async function doExport() {
-    const range = resolveRange('this_month');
-    const res = await salesService.getSales({ pageSize: 'all', from: range.from, to: range.to });
+    // export exactly what's on screen — the same period, filters and search
+    const { page, pageSize, ...q } = lastParams; // eslint-disable-line no-unused-vars
+    const range = resolveRange(q.preset || 'this_month');
+    const res = await salesService.getSales({ ...q, pageSize: 'all', from: range.from, to: range.to });
     exportCsv(`sales-${Date.now()}`, res.data || [], [
       { key: 'invoiceNo', label: 'Invoice' }, { key: 'createdAt', label: 'Date' }, { key: 'customerName', label: 'Customer' },
       { key: 'cashierName', label: 'Cashier' }, { key: 'totalQty', label: 'Items' },

@@ -180,12 +180,19 @@ export default function register(router) {
     return ok(platformSettings());
   });
 
+  // only these top-level keys can be written through the API — a client can't
+  // sneak arbitrary keys (e.g. a fake gateway.secret) into the settings doc.
+  const WRITABLE = new Set(['contact', 'billing', 'gateway', 'paymentMethods']);
+
   router.patch('/platform/settings', ({ body }) => {
     requirePlatform();
     return db.tx(() => {
       ensurePlatformSettings();
       const current = col().get(ID);
-      const patch = { ...(body || {}) };
+      const patch = {};
+      for (const [k, v] of Object.entries(body || {})) {
+        if (WRITABLE.has(k)) patch[k] = v;
+      }
       if ('paymentMethods' in patch) patch.paymentMethods = normalizePaymentMethods(patch.paymentMethods) || [];
       const merged = deepMerge(current, patch);
       merged.id = ID;

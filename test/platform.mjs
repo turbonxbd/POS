@@ -181,10 +181,13 @@ T('GUARD: an unauthenticated caller cannot reach /platform/* (401)', anonPlatfor
 await login('admin@txdemo.shop', 'demo1234');
 
 /* signup dup email + validation */
-let dup = false; try { await http.post('/signup', { businessName: 'X', email: 'karim@traders.bd', password: 'whatever1' }); } catch (e) { dup = e.status === 409; }
+const aPlan = (await http.get('/plans')).data[0]?.id;
+let dup = false; try { await http.post('/signup', { businessName: 'X', email: 'karim@traders.bd', password: 'whatever1', planId: aPlan }); } catch (e) { dup = e.status === 409; }
 T('signup rejects a duplicate email (409)', dup);
 let bad = false; try { await http.post('/signup', { businessName: '', email: 'nope', password: 'x' }); } catch (e) { bad = e.status === 422; }
 T('signup validates input (422)', bad);
+let noPlan = false; try { await http.post('/signup', { businessName: 'No Plan Co', email: 'noplan@shop.bd', password: 'whatever1' }); } catch (e) { noPlan = e.status === 422 && !!e.data?.errors?.planId; }
+T('signup requires a plan (422)', noPlan);
 
 /* ---------------------------------------------------------- support */
 await clearContext();

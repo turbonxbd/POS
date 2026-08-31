@@ -1029,7 +1029,8 @@ final class Platform
         $ctx->requirePlatformAdmin();
         Provision::ensurePlatformSettings($ctx->db);
         $current = Provision::platformSettings($ctx->db);
-        $body = $ctx->body();
+        // whitelist: a client cannot PATCH arbitrary keys into the settings doc
+        $body = array_intersect_key($ctx->body(), array_flip(['contact', 'billing', 'gateway', 'paymentMethods']));
         if (array_key_exists('paymentMethods', $body)) {
             $body['paymentMethods'] = Provision::normalizePaymentMethods((array) $body['paymentMethods']);
         }

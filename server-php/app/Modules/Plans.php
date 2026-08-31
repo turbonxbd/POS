@@ -84,6 +84,12 @@ final class Plans
             $d['extraBranchPrice'] = $extra;
         }
         $d += ['currency' => 'BDT', 'currencySymbol' => '৳', 'description' => ''];
+        // setting a plan back to Active un-archives it (else the active list still hides it)
+        if (($d['status'] ?? null) === 'active') {
+            $d['archivedAt'] = null;
+        } elseif (($d['status'] ?? null) === 'archived' && empty($d['archivedAt'])) {
+            $d['archivedAt'] = Clock::now();
+        }
         $d['monthlyPrice'] = max(0, (int) ($d['monthlyPrice'] ?? $d['price'] ?? 0));
         $d['price'] = $d['monthlyPrice']; // mirror
         $d['setupPrice'] = max(0, (int) ($d['setupPrice'] ?? 0));
@@ -124,9 +130,9 @@ final class Plans
         $doc['id'] = $p['id'];
         $doc['updatedAt'] = Clock::now();
         $ctx->db->run(
-            'UPDATE plans SET name = :n, price = :p, billing_period = :bp, status = :s, sort_order = :o, doc = :d, updated_at = :u WHERE id = :id',
+            'UPDATE plans SET name = :n, price = :p, billing_period = :bp, status = :s, sort_order = :o, archived_at = :ar, doc = :d, updated_at = :u WHERE id = :id',
             [':n' => $doc['name'], ':p' => $doc['price'], ':bp' => $doc['billingPeriod'] ?? 'monthly', ':s' => $doc['status'],
-             ':o' => $doc['sortOrder'] ?? 0, ':d' => json_encode($doc), ':u' => $doc['updatedAt'], ':id' => $p['id']],
+             ':o' => $doc['sortOrder'] ?? 0, ':ar' => $doc['archivedAt'] ?? null, ':d' => json_encode($doc), ':u' => $doc['updatedAt'], ':id' => $p['id']],
         );
         Audit::record($ctx, 'update', 'plan', $p['id'], ['before' => $existing, 'after' => $doc]);
         return Response::json($doc);

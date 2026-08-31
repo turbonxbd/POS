@@ -152,8 +152,8 @@ test('signup: creates an isolated merchant + pending subscription + signs in', f
     $appr2 = authed($kit, $adm, 'GET', '/api/platform/approvals', [])['body'];
     expect(!in_array($mid, array_column($appr2['data'], 'merchantId'), true));
 
-    // duplicate email rejected
-    expect_eq($kit->request('POST', '/api/signup', ['json' => ['businessName' => 'X', 'email' => 'nadia@shop.bd', 'password' => 'whatever1']])['status'], 409);
+    // duplicate email rejected (a valid plan is supplied so we reach the dup check)
+    expect_eq($kit->request('POST', '/api/signup', ['json' => ['businessName' => 'X', 'email' => 'nadia@shop.bd', 'password' => 'whatever1', 'planId' => $planId]])['status'], 409);
     // bad input
     expect_eq($kit->request('POST', '/api/signup', ['json' => ['businessName' => '', 'email' => 'nope', 'password' => 'x']])['status'], 422);
 });
