@@ -196,6 +196,17 @@ await step('dead-stock report', async () => {
 });
 T('dashboard aggregates from persisted sales', (await http.get('/dashboard', { params: { branchId: B, preset: 'this_year' } })).kpis.totalSales > 0);
 T('audit log append-only & populated', (await http.get('/audit-logs', { params: { pageSize: 5 } })).data.length > 0);
+await step('audit log filters', async () => {
+  const all = await http.get('/audit-logs', { params: { pageSize: 'all' } });
+  const mine = all.data.find((l) => l.actorId);
+  const byActor = await http.get('/audit-logs', { params: { pageSize: 'all', actorId: mine.actorId } });
+  T('actorId filter narrows the log', byActor.data.length > 0 && byActor.data.every((l) => l.actorId === mine.actorId));
+  const withBranch = all.data.find((l) => l.meta?.branchId);
+  const byBranch = await http.get('/audit-logs', { params: { pageSize: 'all', branchId: withBranch.meta.branchId } });
+  T('branchId filter narrows the log', byBranch.data.every((l) => (l.meta?.branchId || l.branchId) === withBranch.meta.branchId));
+  const future = await http.get('/audit-logs', { params: { pageSize: 'all', from: '2099-01-01' } });
+  T('a future "from" date returns nothing', future.data.length === 0);
+});
 T('backup export contains data', (await http.get('/backup/export')).collections.products.length > 0);
 
 // ---- RBAC ---- (TX Demo ships owner-only; add a Cashier to check role separation)

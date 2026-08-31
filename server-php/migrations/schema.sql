@@ -569,11 +569,14 @@ CREATE TABLE audit_logs (
   entity VARCHAR(40),
   entity_id VARCHAR(64),
   actor_id VARCHAR(36),
+  branch_id VARCHAR(36),
   at VARCHAR(32) NOT NULL,
   doc LONGTEXT NOT NULL
 );
 CREATE INDEX audit_logs_merchant_at ON audit_logs (merchant_id, at);
 CREATE INDEX audit_logs_entity ON audit_logs (entity, entity_id);
+CREATE INDEX audit_logs_actor ON audit_logs (actor_id);
+CREATE INDEX audit_logs_branch ON audit_logs (branch_id);
 
 CREATE TABLE notifications (
   id VARCHAR(36) PRIMARY KEY,

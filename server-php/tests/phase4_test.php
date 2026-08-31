@@ -51,6 +51,18 @@ test('audit-logs + backup export carry the merchant data', function () {
     $logs = authed($kit, $s, 'GET', '/api/audit-logs', ['query' => ['entity' => 'product']]);
     expect($logs['body']['total'] >= 1);
 
+    // filter by actor, branch and date range
+    $actorId = $logs['body']['data'][0]['actorId'];
+    $byActor = authed($kit, $s, 'GET', '/api/audit-logs', ['query' => ['actorId' => $actorId]]);
+    expect($byActor['body']['total'] >= 1);
+    foreach ($byActor['body']['data'] as $l) {
+        expect_eq($l['actorId'], $actorId);
+    }
+    $byBranch = authed($kit, $s, 'GET', '/api/audit-logs', ['query' => ['branchId' => $kit->branchId]]);
+    expect($byBranch['body']['total'] >= 1, 'branch filter keeps rows');
+    $future = authed($kit, $s, 'GET', '/api/audit-logs', ['query' => ['from' => '2099-01-01']]);
+    expect_eq($future['body']['total'], 0);
+
     $exp = authed($kit, $s, 'GET', '/api/backup/export', []);
     expect_eq($exp['status'], 200);
     expect_eq(count($exp['body']['data']['collections']['products']), 1);

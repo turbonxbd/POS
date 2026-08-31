@@ -275,7 +275,7 @@ final class Org
         $q = $ctx->request->query;
         $where = ['1=1'];
         $params = [];
-        foreach (['entity' => 'entity', 'action' => 'action', 'actorId' => 'actor_id'] as $k => $col) {
+        foreach (['entity' => 'entity', 'action' => 'action', 'actorId' => 'actor_id', 'branchId' => 'branch_id'] as $k => $col) {
             if (!empty($q[$k]) && $q[$k] !== 'all') {
                 $where[] = "{$col} = :{$col}";
                 $params[":{$col}"] = $q[$k];

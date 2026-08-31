@@ -164,7 +164,8 @@ export default function register(router) {
     if (!isLegacyMode() && !isPlatformActor()) rows = rows.filter((l) => l.merchantId === mid);
     if (query.entity && query.entity !== 'all') rows = rows.filter((l) => l.entity === query.entity);
     if (query.action && query.action !== 'all') rows = rows.filter((l) => l.action === query.action);
-    if (query.actorId) rows = rows.filter((l) => l.actorId === query.actorId);
+    if (query.actorId && query.actorId !== 'all') rows = rows.filter((l) => l.actorId === query.actorId);
+    if (query.branchId && query.branchId !== 'all') rows = rows.filter((l) => (l.meta?.branchId || l.branchId) === query.branchId);
     if (query.from || query.to) {
       const from = query.from ? new Date(query.from).getTime() : -Infinity;
       const to = query.to ? new Date(query.to).getTime() : Infinity;

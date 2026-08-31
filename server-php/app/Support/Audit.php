@@ -16,23 +16,37 @@ final class Audit
         $actor = $opts['actor'] ?? $ctx->actor;
         $id = Uuid::v4();
         $at = Clock::now();
+
+        $branchId = $opts['meta']['branchId'] ?? null;
+        if (!$branchId && $ctx->actor) {
+            try {
+                $branchId = Branch::resolveId($ctx);
+            } catch (\Throwable) {
+                $branchId = null;
+            }
+        }
+        $meta = $opts['meta'] ?? [];
+        if ($branchId) {
+            $meta['branchId'] = $branchId;
+        }
+
         $doc = [
             'id' => $id, 'action' => $action, 'entity' => $entity, 'entityId' => $entityId,
             'actorId' => $actor['id'] ?? null,
             'actorName' => $actor['name'] ?? 'system',
             'before' => $opts['before'] ?? null,
             'after' => $opts['after'] ?? null,
-            'meta' => $opts['meta'] ?? [],
+            'meta' => $meta,
             'ip' => $ctx->request->ip ?? 'client',
             'device' => $ctx->request->header('user-agent'),
             'at' => $at, 'createdAt' => $at,
         ];
         $ctx->db->run(
-            'INSERT INTO audit_logs (id, merchant_id, action, entity, entity_id, actor_id, at, doc)
-             VALUES (:id, :m, :a, :e, :eid, :actor, :at, :doc)',
+            'INSERT INTO audit_logs (id, merchant_id, action, entity, entity_id, actor_id, branch_id, at, doc)
+             VALUES (:id, :m, :a, :e, :eid, :actor, :branch, :at, :doc)',
             [
                 ':id' => $id, ':m' => $ctx->merchantId ?? '', ':a' => $action, ':e' => $entity,
-                ':eid' => $entityId, ':actor' => $doc['actorId'], ':at' => $at,
+                ':eid' => $entityId, ':actor' => $doc['actorId'], ':branch' => $branchId, ':at' => $at,
                 ':doc' => json_encode($doc, JSON_UNESCAPED_UNICODE),
             ],
         );
