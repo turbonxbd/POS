@@ -24,6 +24,7 @@ export const NAV_GROUPS = [
     items: [
       { path: '/inventory', label: 'Inventory', icon: 'warehouse', permission: 'inventory.view' },
       { path: '/stock-adjustments', label: 'Stock Adjustments', icon: 'sliders', permission: 'inventory.adjust' },
+      { path: '/stock-transfers', label: 'Stock Transfers', icon: 'truck', permission: 'inventory.transfer' },
     ],
   },
   {

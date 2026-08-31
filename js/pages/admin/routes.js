@@ -13,6 +13,7 @@ export const PAGE_ROUTES = [
   { path: '/barcodes', permission: 'barcode.manage', title: 'Barcode Generator', load: () => import('./barcode-generator.js') },
   { path: '/inventory', permission: 'inventory.view', title: 'Inventory', load: () => import('./inventory.js') },
   { path: '/stock-adjustments', permission: 'inventory.adjust', title: 'Stock Adjustments', load: () => import('./stock-adjustments.js') },
+  { path: '/stock-transfers', permission: 'inventory.transfer', title: 'Stock Transfers', load: () => import('./stock-transfers.js') },
   { path: '/purchases', permission: 'purchases.view', title: 'Purchases', load: () => import('./purchases.js') },
   { path: '/purchases/new', permission: 'purchases.create', title: 'New Purchase', load: () => import('./purchase-form.js') },
   { path: '/purchases/:id', permission: 'purchases.view', title: 'Purchase', load: () => import('./purchase-detail.js') },

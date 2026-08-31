@@ -70,6 +70,7 @@ const pages = [
   ['brands', 'js/pages/admin/brands.js', { params: {}, query: {} }],
   ['inventory', 'js/pages/admin/inventory.js', { params: {}, query: {} }],
   ['stock-adjustments', 'js/pages/admin/stock-adjustments.js', { params: {}, query: {} }],
+  ['stock-transfers', 'js/pages/admin/stock-transfers.js', { params: {}, query: {} }],
   ['purchases', 'js/pages/admin/purchases.js', { params: {}, query: {} }],
   ['purchase-form', 'js/pages/admin/purchase-form.js', { params: {}, query: {} }],
   ['suppliers', 'js/pages/admin/suppliers.js', { params: {}, query: {} }],

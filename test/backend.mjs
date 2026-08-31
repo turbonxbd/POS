@@ -111,8 +111,15 @@ await step('payment rules', async () => {
 await step('inventory', async () => {
   const adj = await http.post('/inventory/adjustments', { branchId: B, reason: 'recount', lines: [{ productId: np.id, deltaQty: 5 }] });
   T('adjustment applied', adj.netUnits === 5);
-  const trf = await http.post('/inventory/transfers', { fromBranchId: B, toBranchId: login.branches[1].id, lines: [{ productId: np.id, qty: 3 }] });
-  T('branch transfer moves stock both sides', !!trf.reference);
+  const B2 = login.branches[1].id;
+  const fromBefore = (await http.get('/products/' + np.id, { params: { branchId: B } })).stock;
+  const toBefore = (await http.get('/products/' + np.id, { params: { branchId: B2 } })).stock;
+  const trf = await http.post('/inventory/transfers', { fromBranchId: B, toBranchId: B2, lines: [{ productId: np.id, qty: 3 }] });
+  T('branch transfer returns a reference', !!trf.reference);
+  T('branch transfer decreases the source branch by 3',
+    (await http.get('/products/' + np.id, { params: { branchId: B } })).stock === fromBefore - 3);
+  T('branch transfer increases the destination branch by 3',
+    (await http.get('/products/' + np.id, { params: { branchId: B2 } })).stock === toBefore + 3);
   T('valuation computes', (await http.get('/inventory/valuation', { params: { branchId: B } })).summary.totalCostValue > 0);
 });
 
