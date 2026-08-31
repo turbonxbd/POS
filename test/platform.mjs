@@ -71,6 +71,28 @@ const detail = await http.get('/platform/merchants/' + demoMerchantId);
 T('merchant detail: subscription active, 2 branches, 1 user, usage stats',
   detail.subscription.liveStatus === 'active' && detail.branches.length === 2 && detail.users.length === 1 && detail.usage.sales > 0);
 
+/* S9: merchant list is paginated; S3: tags + internal notes; S2: message a merchant */
+const paged = await http.get('/platform/merchants', { params: { pageSize: 1, page: 1 } });
+T('merchant list is paginated (pageSize + total + totalPages)',
+  paged.data.length === 1 && typeof paged.total === 'number' && paged.totalPages >= 1 && Array.isArray(paged.tags));
+await http.patch('/platform/merchants/' + demoMerchantId, { tags: ['VIP', 'chase-payment', 'VIP'] });
+const tagged = await http.get('/platform/merchants/' + demoMerchantId);
+T('merchant tags are de-duplicated and stored', JSON.stringify(tagged.merchant.tags) === JSON.stringify(['VIP', 'chase-payment']));
+const tagFiltered = await http.get('/platform/merchants', { params: { tag: 'VIP' } });
+T('merchant list filters by tag', tagFiltered.data.every((m) => m.tags.includes('VIP')) && tagFiltered.tags.includes('VIP'));
+const note = await http.post('/platform/merchants/' + demoMerchantId + '/notes', { text: 'Called about the overdue invoice.' });
+T('a note is added with an author + timestamp', note.id && note.authorName && note.at);
+const withNote = await http.get('/platform/merchants/' + demoMerchantId);
+T('the note shows on the merchant detail', withNote.merchant.notes.some((n) => n.id === note.id));
+await http.del('/platform/merchants/' + demoMerchantId + '/notes/' + note.id);
+T('a note can be deleted', !(await http.get('/platform/merchants/' + demoMerchantId)).merchant.notes.some((n) => n.id === note.id));
+let msgBad = false;
+try { await http.post('/platform/merchants/' + demoMerchantId + '/message', { message: '' }); } catch (e) { msgBad = e.status === 422; }
+T('an empty merchant message is rejected', msgBad);
+await http.post('/platform/merchants/' + demoMerchantId + '/message', { title: 'Reminder', message: 'Your payment is due in 3 days.' });
+T('messaging a merchant logs an internal note', (await http.get('/platform/merchants/' + demoMerchantId)).merchant.notes.some((n) => n.kind === 'message'));
+await http.patch('/platform/merchants/' + demoMerchantId, { tags: [] }); // reset for later assertions
+
 /* the merchant renames their business in Settings -> propagates to Super Admin */
 await login('admin@txdemo.shop', 'demo1234');
 await http.put('/settings', { business: { name: 'TX Demo Retail', email: 'ops@txdemo.shop' } });

@@ -201,6 +201,37 @@ test('platform: dashboard + merchants + subscription lifecycle + revenue', funct
     expect_eq(count($detail['body']['branches']), 1);
     expect_eq(count($detail['body']['users']), 1);
 
+    // S9 pagination + S3 tags/notes + S2 message
+    $paged = authed($kit, $admin, 'GET', '/api/platform/merchants', ['query' => ['pageSize' => 1, 'page' => 1]])['body'];
+    expect_eq(count($paged['data']), 1);
+    expect($paged['totalPages'] >= 2);
+    expect(is_array($paged['tags']));
+
+    authed($kit, $admin, 'PATCH', '/api/platform/merchants/' . $mid, ['json' => ['tags' => ['VIP', 'chase-payment', 'VIP']]]);
+    $tagged = authed($kit, $admin, 'GET', '/api/platform/merchants/' . $mid, [])['body'];
+    expect_eq($tagged['merchant']['tags'], ['VIP', 'chase-payment']);
+    $byTag = authed($kit, $admin, 'GET', '/api/platform/merchants', ['query' => ['tag' => 'VIP']])['body'];
+    expect_eq($byTag['total'], 1);
+    expect(in_array('VIP', $byTag['tags'], true));
+
+    $note = authed($kit, $admin, 'POST', '/api/platform/merchants/' . $mid . '/notes', ['json' => ['text' => 'Chased the overdue invoice.']]);
+    expect_eq($note['status'], 201);
+    expect($note['body']['id'] !== null && $note['body']['authorName'] !== null);
+    $wn = authed($kit, $admin, 'GET', '/api/platform/merchants/' . $mid, [])['body'];
+    expect(count(array_filter($wn['merchant']['notes'], static fn ($n) => $n['id'] === $note['body']['id'])) === 1);
+    authed($kit, $admin, 'DELETE', '/api/platform/merchants/' . $mid . '/notes/' . $note['body']['id'], []);
+    $wn2 = authed($kit, $admin, 'GET', '/api/platform/merchants/' . $mid, [])['body'];
+    expect(count(array_filter($wn2['merchant']['notes'], static fn ($n) => $n['id'] === $note['body']['id'])) === 0);
+
+    expect_eq(authed($kit, $admin, 'POST', '/api/platform/merchants/' . $mid . '/message', ['json' => ['message' => '']])['status'], 422);
+    authed($kit, $admin, 'POST', '/api/platform/merchants/' . $mid . '/message', ['json' => ['title' => 'Reminder', 'message' => 'Payment due in 3 days.']]);
+    $wn3 = authed($kit, $admin, 'GET', '/api/platform/merchants/' . $mid, [])['body'];
+    expect(count(array_filter($wn3['merchant']['notes'], static fn ($n) => ($n['kind'] ?? '') === 'message')) === 1);
+    // the merchant sees the message in their notification bell
+    $rmanMsg = $kit->loginAs('rahman@store.bd', 'rahmanpw1');
+    expect(authed($kit, $rmanMsg, 'GET', '/api/notifications', [])['body']['total'] >= 1);
+    authed($kit, $admin, 'PATCH', '/api/platform/merchants/' . $mid, ['json' => ['tags' => []]]);
+
     // the merchant renames itself in Settings -> propagates to Super Admin + /auth/me
     $rman = $kit->loginAs('rahman@store.bd', 'rahmanpw1');
     authed($kit, $rman, 'PUT', '/api/settings', ['json' => ['business' => ['name' => 'Rahman Superstore', 'email' => 'hi@rahman.store']]]);

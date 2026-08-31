@@ -29,6 +29,9 @@ final class Platform
         $r->get('/platform/merchants/:id', fn (Context $c, $p) => self::merchantDetail($c, $p));
         $r->post('/platform/merchants', fn (Context $c) => self::createMerchant($c));
         $r->patch('/platform/merchants/:id', fn (Context $c, $p) => self::updateMerchant($c, $p));
+        $r->post('/platform/merchants/:id/notes', fn (Context $c, $p) => self::addMerchantNote($c, $p));
+        $r->delete('/platform/merchants/:id/notes/:noteId', fn (Context $c, $p) => self::deleteMerchantNote($c, $p));
+        $r->post('/platform/merchants/:id/message', fn (Context $c, $p) => self::messageMerchant($c, $p));
 
         $r->get('/platform/subscriptions', fn (Context $c) => self::subscriptions($c));
         $r->patch('/platform/subscriptions/:id', fn (Context $c, $p) => self::updateSubscription($c, $p));
@@ -561,6 +564,8 @@ final class Platform
                 'subscriptionStart' => $sub['startedAt'] ?? null, 'subscriptionExpiry' => $sub['expiresAt'] ?? null,
                 'branches' => (int) $ctx->db->value('SELECT COUNT(*) FROM branches WHERE merchant_id = :m', [':m' => $m['id']]),
                 'users' => (int) $ctx->db->value('SELECT COUNT(*) FROM users WHERE merchant_id = :m AND is_platform_admin = 0', [':m' => $m['id']]),
+                'tags' => array_values(array_filter((array) ($d['tags'] ?? []))),
+                'noteCount' => count((array) ($d['notes'] ?? [])),
             ];
             if (!empty($q['status']) && $q['status'] !== 'all' && $row['status'] !== $q['status']) {
                 continue;
@@ -574,13 +579,33 @@ final class Platform
             if (!empty($q['planId']) && $row['planId'] !== $q['planId']) {
                 continue;
             }
+            if (!empty($q['tag']) && !in_array($q['tag'], $row['tags'], true)) {
+                continue;
+            }
             $s = mb_strtolower(trim((string) ($q['search'] ?? '')));
-            if ($s !== '' && !str_contains(mb_strtolower($row['name'] . ' ' . $row['businessName'] . ' ' . $row['email']), $s)) {
+            if ($s !== '' && !str_contains(mb_strtolower($row['name'] . ' ' . $row['businessName'] . ' ' . $row['email'] . ' ' . implode(' ', $row['tags'])), $s)) {
                 continue;
             }
             $data[] = $row;
         }
-        return Response::json(['data' => $data, 'total' => count($data)]);
+
+        $allTags = [];
+        foreach ($data as $row) {
+            foreach ($row['tags'] as $t) {
+                $allTags[$t] = true;
+            }
+        }
+        $allTags = array_keys($allTags);
+        sort($allTags);
+
+        $total = count($data);
+        $pageSize = ($q['pageSize'] ?? null) === 'all' ? max($total, 1) : max(1, (int) ($q['pageSize'] ?? 20));
+        $totalPages = max(1, (int) ceil($total / $pageSize));
+        $page = min(max(1, (int) ($q['page'] ?? 1)), $totalPages);
+        return Response::json([
+            'data' => array_slice($data, ($page - 1) * $pageSize, $pageSize),
+            'total' => $total, 'page' => $page, 'pageSize' => $pageSize, 'totalPages' => $totalPages, 'tags' => $allTags,
+        ]);
     }
 
     private static function merchantDetail(Context $ctx, array $p): Response
@@ -602,8 +627,15 @@ final class Platform
             ]);
         }
         $biz = $ctx->db->first('SELECT doc FROM businesses WHERE merchant_id = :m', [':m' => $mid]);
+        $mDoc = json_decode($m['doc'], true);
+        $notes = (array) ($mDoc['notes'] ?? []);
+        usort($notes, static fn ($a, $b) => strcmp((string) ($b['at'] ?? ''), (string) ($a['at'] ?? '')));
         return Response::json([
-            'merchant' => array_merge(json_decode($m['doc'], true), ['status' => $m['status'], 'registeredAt' => $m['created_at']]),
+            'merchant' => array_merge($mDoc, [
+                'status' => $m['status'], 'registeredAt' => $m['created_at'],
+                'tags' => array_values(array_filter((array) ($mDoc['tags'] ?? []))),
+                'notes' => $notes,
+            ]),
             'business' => $biz ? json_decode($biz['doc'], true) : null,
             'subscription' => $subOut,
             'branchRequests' => array_map(static fn ($x) => json_decode($x['doc'], true), $ctx->db->all('SELECT doc FROM branch_requests WHERE merchant_id = :m ORDER BY at DESC', [':m' => $mid])),
@@ -660,6 +692,16 @@ final class Platform
         if (isset($b['status']) && in_array($b['status'], ['active', 'suspended'], true)) {
             $doc['status'] = $b['status'];
         }
+        if (is_array($b['tags'] ?? null)) {
+            $tags = [];
+            foreach ($b['tags'] as $t) {
+                $t = mb_substr(trim((string) $t), 0, 24);
+                if ($t !== '' && !in_array($t, $tags, true)) {
+                    $tags[] = $t;
+                }
+            }
+            $doc['tags'] = array_slice($tags, 0, 12);
+        }
         $doc['updatedAt'] = Clock::now();
         $ctx->db->run('UPDATE merchants SET name = :n, status = :s, doc = :d, updated_at = :u WHERE id = :id',
             [':n' => $doc['name'], ':s' => $doc['status'] ?? 'active', ':d' => json_encode($doc), ':u' => $doc['updatedAt'], ':id' => $p['id']]);
@@ -679,6 +721,71 @@ final class Platform
         }
         Audit::record($ctx, 'update', 'merchant', $p['id'], ['after' => $doc]);
         return Response::json($doc);
+    }
+
+    private static function loadMerchantDoc(Context $ctx, string $id): array
+    {
+        $row = $ctx->db->first('SELECT doc FROM merchants WHERE id = :id', [':id' => $id]) ?? throw HttpError::notFound('Merchant');
+        return json_decode($row['doc'], true);
+    }
+
+    private static function saveMerchantDoc(Context $ctx, string $id, array $doc): void
+    {
+        $doc['updatedAt'] = Clock::now();
+        $ctx->db->run('UPDATE merchants SET doc = :d, updated_at = :u WHERE id = :id',
+            [':d' => json_encode($doc, JSON_UNESCAPED_UNICODE), ':u' => $doc['updatedAt'], ':id' => $id]);
+    }
+
+    private static function addMerchantNote(Context $ctx, array $p): Response
+    {
+        $ctx->requirePlatformAdmin();
+        $doc = self::loadMerchantDoc($ctx, $p['id']);
+        $text = trim((string) ($ctx->body()['text'] ?? ''));
+        if ($text === '') {
+            throw HttpError::badRequest('Write a note first.');
+        }
+        $note = [
+            'id' => Uuid::v4(), 'text' => mb_substr($text, 0, 2000),
+            'authorName' => $ctx->actor['name'] ?? 'Super Admin', 'at' => Clock::now(),
+        ];
+        $doc['notes'] = array_merge((array) ($doc['notes'] ?? []), [$note]);
+        self::saveMerchantDoc($ctx, $p['id'], $doc);
+        Audit::record($ctx, 'update', 'merchant', $p['id'], ['meta' => ['action' => 'note_added']]);
+        return Response::json($note, 201);
+    }
+
+    private static function deleteMerchantNote(Context $ctx, array $p): Response
+    {
+        $ctx->requirePlatformAdmin();
+        $doc = self::loadMerchantDoc($ctx, $p['id']);
+        $doc['notes'] = array_values(array_filter((array) ($doc['notes'] ?? []), static fn ($n) => ($n['id'] ?? null) !== $p['noteId']));
+        self::saveMerchantDoc($ctx, $p['id'], $doc);
+        return Response::json(['deleted' => true]);
+    }
+
+    private static function messageMerchant(Context $ctx, array $p): Response
+    {
+        $ctx->requirePlatformAdmin();
+        $doc = self::loadMerchantDoc($ctx, $p['id']);
+        $b = $ctx->body();
+        $message = trim((string) ($b['message'] ?? ''));
+        if ($message === '') {
+            throw HttpError::badRequest('Write a message first.');
+        }
+        $title = trim((string) ($b['title'] ?? '')) ?: 'Message from POS TXbd';
+        self::notifyMerchant($ctx, $p['id'], [
+            'title' => mb_substr($title, 0, 120),
+            'message' => mb_substr($message, 0, 1000),
+            'level' => ($b['level'] ?? '') === 'warning' ? 'warning' : 'info',
+            'link' => $b['link'] ?? '#/',
+        ]);
+        $doc['notes'] = array_merge((array) ($doc['notes'] ?? []), [[
+            'id' => Uuid::v4(), 'text' => 'Message sent: "' . mb_substr($message, 0, 200) . '"',
+            'authorName' => $ctx->actor['name'] ?? 'Super Admin', 'at' => Clock::now(), 'kind' => 'message',
+        ]]);
+        self::saveMerchantDoc($ctx, $p['id'], $doc);
+        Audit::record($ctx, 'update', 'merchant', $p['id'], ['meta' => ['action' => 'message_sent']]);
+        return Response::json(['sent' => true]);
     }
 
     /* ------------------------------------------------------ subscriptions */

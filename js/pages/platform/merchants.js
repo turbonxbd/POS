@@ -1,22 +1,25 @@
 /**
- * platform/merchants.js - all merchants, filterable, drill into detail.
+ * platform/merchants.js - all merchants, filterable + paginated, drill into detail.
  */
 import platformService from '../../services/platform-service.js';
 import { openModal } from '../../components/modal.js';
 import { createForm } from '../../components/form.js';
 import { toast } from '../../components/toast.js';
 import { escapeHtml } from '../../utils/dom.js';
+import { debounce } from '../../utils/debounce.js';
+import { renderPagination } from '../../components/pagination.js';
 import { page, loading, errorBox, tableCard, badge, fmtDate, liveRefresh } from './kit.js';
 
 export default async function merchantsPage(ctx, mount) {
   const p = page(mount, { title: 'Merchants', subtitle: 'Every business on POS TXbd' });
   p.setActions([{ label: 'Add merchant', icon: 'plus', onClick: () => addMerchant(() => render()) }]);
   const q = { ...ctx.query };
+  const state = { page: 1, tags: [] };
 
   const bar = document.createElement('div');
   bar.className = 'sa-filterbar';
   bar.innerHTML = `
-    <input class="input" id="m-search" type="search" placeholder="Search name / business / email" value="${escapeHtml(q.search || '')}">
+    <input class="input" id="m-search" type="search" placeholder="Search name / business / email / tag" value="${escapeHtml(q.search || '')}">
     <select class="select" id="m-status">
       <option value="">Account: all</option>
       <option value="active"${q.status === 'active' ? ' selected' : ''}>Active</option>
@@ -27,7 +30,8 @@ export default async function merchantsPage(ctx, mount) {
       <option value="active"${q.subscription === 'active' ? ' selected' : ''}>Active</option>
       <option value="pending"${q.subscription === 'pending' ? ' selected' : ''}>Pending</option>
       <option value="expired"${q.subscription === 'expired' ? ' selected' : ''}>Expired</option>
-    </select>`;
+    </select>
+    <select class="select" id="m-tag"><option value="">Tag: any</option></select>`;
   p.body.appendChild(bar);
   const list = document.createElement('div');
   p.body.appendChild(list);
@@ -36,10 +40,15 @@ export default async function merchantsPage(ctx, mount) {
     search: bar.querySelector('#m-search').value.trim() || undefined,
     status: bar.querySelector('#m-status').value || undefined,
     subscription: bar.querySelector('#m-sub').value || undefined,
+    tag: bar.querySelector('#m-tag').value || undefined,
     new: q.new,
+    page: state.page,
+    pageSize: 20,
   });
-  bar.addEventListener('input', () => render());
-  bar.addEventListener('change', () => render());
+
+  const reload = debounce(() => { state.page = 1; render(); }, 250);
+  bar.querySelector('#m-search').addEventListener('input', reload);
+  bar.querySelectorAll('select').forEach((s) => s.addEventListener('change', () => { state.page = 1; render(); }));
 
   async function render() {
     loading(list);
@@ -49,8 +58,19 @@ export default async function merchantsPage(ctx, mount) {
     } catch (err) {
       return errorBox(list, err);
     }
+
+    // keep the tag filter options in sync (without losing the current selection)
+    const tagSel = bar.querySelector('#m-tag');
+    const cur = tagSel.value;
+    if ((res.tags || []).join('|') !== state.tags.join('|')) {
+      state.tags = res.tags || [];
+      tagSel.innerHTML = `<option value="">Tag: any</option>` + state.tags.map((t) => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
+      tagSel.value = cur;
+    }
+
     const rows = res.data.map((m) => `<tr class="sa-row" data-id="${m.id}">
-      <td><strong>${escapeHtml(m.businessName)}</strong><div class="muted text-sm">${escapeHtml(m.ownerName)} · ${escapeHtml(m.email)}</div></td>
+      <td><strong>${escapeHtml(m.businessName)}</strong><div class="muted text-sm">${escapeHtml(m.ownerName)} · ${escapeHtml(m.email)}</div>
+        ${(m.tags || []).length ? `<div class="sa-tags">${m.tags.map((t) => `<span class="sa-tag">${escapeHtml(t)}</span>`).join('')}</div>` : ''}</td>
       <td>${badge(m.status)}</td>
       <td>${escapeHtml(m.planName || '—')}</td>
       <td>${badge(m.subscriptionStatus)}</td>
@@ -59,13 +79,22 @@ export default async function merchantsPage(ctx, mount) {
       <td class="num">${m.users}</td>
       <td>${fmtDate(m.registeredAt)}</td>
     </tr>`);
-    list.innerHTML = `<p class="muted text-sm" style="margin:0 0 8px">${res.total} merchant${res.total === 1 ? '' : 's'}</p>` +
+
+    const from = res.total === 0 ? 0 : (res.page - 1) * res.pageSize + 1;
+    const to = Math.min(res.page * res.pageSize, res.total);
+    list.innerHTML = `<p class="muted text-sm" style="margin:0 0 8px">${res.total ? `${from}–${to} of ` : ''}${res.total} merchant${res.total === 1 ? '' : 's'}</p>` +
       tableCard({
         head: [{ label: 'Business' }, { label: 'Account' }, { label: 'Plan' }, { label: 'Subscription' }, { label: 'Expires' }, { label: 'Branches', num: true }, { label: 'Users', num: true }, { label: 'Registered' }],
         rows,
         empty: 'No merchants match these filters.',
-      });
+      }) +
+      renderPagination(res.page, res.totalPages || 1);
+
     list.querySelectorAll('.sa-row').forEach((r) => r.addEventListener('click', () => { location.hash = '#/merchants/' + r.dataset.id; }));
+    list.querySelectorAll('.js-page').forEach((b) => b.addEventListener('click', () => {
+      const next = Number(b.dataset.page);
+      if (next && next !== state.page) { state.page = next; render(); }
+    }));
   }
   await render();
   liveRefresh(p.body, render);

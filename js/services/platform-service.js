@@ -25,6 +25,9 @@ export const platformService = {
   merchant: (id) => http.get(`/platform/merchants/${id}`),
   createMerchant: (body) => http.post('/platform/merchants', body),
   updateMerchant: (id, body) => http.patch(`/platform/merchants/${id}`, body),
+  addMerchantNote: (id, text) => http.post(`/platform/merchants/${id}/notes`, { text }),
+  deleteMerchantNote: (id, noteId) => http.del(`/platform/merchants/${id}/notes/${noteId}`),
+  messageMerchant: (id, body) => http.post(`/platform/merchants/${id}/message`, body),
 
   /* subscriptions + billing */
   subscriptions: (params = {}) => http.get('/platform/subscriptions', { params }),

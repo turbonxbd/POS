@@ -135,15 +135,24 @@ export default function register(router) {
         subscriptionStatus: sub ? liveStatus(sub) : 'none',
         subscriptionStart: sub?.startedAt || null, subscriptionExpiry: sub?.expiresAt || null,
         branches: count('branches', m.id), users: c('users').all().filter((u) => u.merchantId === m.id && !u.platform).length,
+        tags: Array.isArray(m.tags) ? m.tags : [],
+        noteCount: Array.isArray(m.notes) ? m.notes.length : 0,
       };
     });
     if (query.status && query.status !== 'all') rows = rows.filter((r) => r.status === query.status);
     if (query.subscription && query.subscription !== 'all') rows = rows.filter((r) => r.subscriptionStatus === query.subscription);
     if (query.new === 'true') rows = rows.filter((r) => (r.registeredAt || '') >= monthAgo);
     if (query.planId) rows = rows.filter((r) => r.planId === query.planId);
+    if (query.tag) rows = rows.filter((r) => r.tags.includes(query.tag));
     const q = String(query.search || '').trim().toLowerCase();
-    if (q) rows = rows.filter((r) => `${r.name} ${r.businessName} ${r.email}`.toLowerCase().includes(q));
-    return ok({ data: rows, total: rows.length });
+    if (q) rows = rows.filter((r) => `${r.name} ${r.businessName} ${r.email} ${r.tags.join(' ')}`.toLowerCase().includes(q));
+
+    const allTags = [...new Set(c('merchants').all().flatMap((m) => (Array.isArray(m.tags) ? m.tags : [])))].sort();
+    const total = rows.length;
+    const pageSize = query.pageSize === 'all' ? (total || 1) : Math.max(1, Number(query.pageSize) || 20);
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const page = Math.min(Math.max(1, Number(query.page) || 1), totalPages);
+    return ok({ data: rows.slice((page - 1) * pageSize, page * pageSize), total, page, pageSize, totalPages, tags: allTags });
   });
 
   router.get('/platform/merchants/:id', ({ params }) => {
@@ -152,7 +161,7 @@ export default function register(router) {
     if (!m) notFound('Merchant');
     const sub = subFor(m.id); const biz = businessOf(m.id);
     return ok({
-      merchant: { ...m, registeredAt: m.createdAt },
+      merchant: { ...m, registeredAt: m.createdAt, tags: Array.isArray(m.tags) ? m.tags : [], notes: Array.isArray(m.notes) ? [...m.notes].sort((a, b) => (b.at || '').localeCompare(a.at || '')) : [] },
       business: biz || null,
       subscription: sub ? { ...sub, liveStatus: liveStatus(sub), dueAmount: dueAmount(sub), branchLimit: (sub.includedBranches || 0) + (sub.extraBranchesPaid || 0) } : null,
       branches: c('branches').all().filter((b) => b.merchantId === m.id),
@@ -193,6 +202,9 @@ export default function register(router) {
       const patch = {};
       if (body.name != null) patch.name = String(body.name).trim();
       if (['active', 'suspended'].includes(body.status)) patch.status = body.status;
+      if (Array.isArray(body.tags)) {
+        patch.tags = [...new Set(body.tags.map((t) => String(t).trim().slice(0, 24)).filter(Boolean))].slice(0, 12);
+      }
       const row = c('merchants').update(params.id, patch);
       // Suspending a merchant must actually cut off access - mirror it onto the
       // subscription so the access gate (which reads the subscription) blocks.
@@ -208,6 +220,49 @@ export default function register(router) {
       }
       audit('update', 'merchant', params.id, { after: row });
       return ok(row);
+    });
+  });
+
+  /* ---- merchant notes (internal CRM, never shown to the merchant) ---- */
+  router.post('/platform/merchants/:id/notes', ({ params, body }) => {
+    requirePlatform();
+    const m = c('merchants').get(params.id);
+    if (!m) notFound('Merchant');
+    const text = String(body?.text || '').trim();
+    if (!text) badRequest('Write a note first.');
+    const actor = getActor() || {};
+    const note = { id: uuid(), text: text.slice(0, 2000), authorName: actor.name || 'Super Admin', at: now() };
+    return db.tx(() => {
+      c('merchants').update(m.id, (row) => ({ notes: [...(row.notes || []), note] }));
+      audit('update', 'merchant', m.id, { meta: { action: 'note_added' } });
+      return created(note);
+    });
+  });
+
+  router.del('/platform/merchants/:id/notes/:noteId', ({ params }) => {
+    requirePlatform();
+    const m = c('merchants').get(params.id);
+    if (!m) notFound('Merchant');
+    return db.tx(() => {
+      c('merchants').update(m.id, (row) => ({ notes: (row.notes || []).filter((n) => n.id !== params.noteId) }));
+      return ok({ deleted: true });
+    });
+  });
+
+  /* ---- message a merchant (drops a notification into their panel) ---- */
+  router.post('/platform/merchants/:id/message', ({ params, body }) => {
+    requirePlatform();
+    const m = c('merchants').get(params.id);
+    if (!m) notFound('Merchant');
+    const title = String(body?.title || '').trim() || 'Message from POS TXbd';
+    const message = String(body?.message || '').trim();
+    if (!message) badRequest('Write a message first.');
+    const actor = getActor() || {};
+    return db.tx(() => {
+      notifyMerchant(m.id, { title: title.slice(0, 120), message: message.slice(0, 1000), level: body?.level === 'warning' ? 'warning' : 'info', link: body?.link || '#/' });
+      c('merchants').update(m.id, (row) => ({ notes: [...(row.notes || []), { id: uuid(), text: `Message sent: "${message.slice(0, 200)}"`, authorName: actor.name || 'Super Admin', at: now(), kind: 'message' }] }));
+      audit('update', 'merchant', m.id, { meta: { action: 'message_sent' } });
+      return ok({ sent: true });
     });
   });
 

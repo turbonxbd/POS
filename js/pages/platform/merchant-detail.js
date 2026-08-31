@@ -32,6 +32,7 @@ export default async function merchantDetailPage(ctx, mount) {
     m.status === 'active'
       ? { label: 'Suspend', variant: 'danger', icon: 'alert-triangle', onClick: () => setStatus('suspended') }
       : { label: 'Reactivate', variant: needsApproval ? 'ghost' : 'primary', icon: 'check', onClick: () => setStatus('active') },
+    { label: 'Message merchant', variant: 'ghost', icon: 'bell', onClick: sendMessage },
     { label: 'Record payment', variant: 'ghost', icon: 'banknote', onClick: recordPayment },
     { label: 'Manage subscription', variant: 'ghost', icon: 'rotate-ccw', onClick: manageSub },
   ]);
@@ -89,6 +90,64 @@ export default async function merchantDetailPage(ctx, mount) {
       empty: 'No payments recorded yet.',
     })}`;
 
+  // ---- internal notes & tags (never shown to the merchant) ----
+  const tags = m.tags || [];
+  const notes = m.notes || [];
+  p.body.insertAdjacentHTML('beforeend', `
+    <h3 class="sa-h3">Internal notes &amp; tags</h3>
+    <div class="card card--pad">
+      <div class="form-section-title">Tags</div>
+      <div class="sa-tags" id="sa-tag-list">
+        ${tags.map((t) => `<span class="sa-tag">${escapeHtml(t)} <button class="sa-tag__x js-untag" data-t="${escapeHtml(t)}" aria-label="Remove tag">×</button></span>`).join('') || '<span class="muted text-sm">No tags yet.</span>'}
+      </div>
+      <div class="row" style="gap:8px;margin-top:8px">
+        <input class="input js-tag-input" placeholder="Add a tag (e.g. VIP, chase-payment)" maxlength="24" style="max-width:260px">
+        <button class="btn btn--ghost btn--sm js-tag-add">Add tag</button>
+      </div>
+      <div class="form-section-title" style="margin-top:16px">Notes</div>
+      <div class="row" style="gap:8px;align-items:flex-start">
+        <textarea class="input js-note-input" rows="2" placeholder="Add a private note about this merchant…" style="flex:1"></textarea>
+        <button class="btn btn--primary btn--sm js-note-add">Add note</button>
+      </div>
+      <div id="sa-note-list" style="margin-top:12px">
+        ${notes.length ? notes.map((n) => `<div class="sa-note">
+          <p>${escapeHtml(n.text)}</p>
+          <div class="sa-note__meta"><span>${escapeHtml(n.authorName || 'Super Admin')} · ${fmtDateTime(n.at)}</span>
+            <button class="btn btn--ghost btn--sm js-note-del" data-id="${n.id}">Delete</button></div>
+        </div>`).join('') : '<p class="muted text-sm">No notes yet.</p>'}
+      </div>
+    </div>`);
+
+  const saveTags = async (next) => {
+    try {
+      await platformService.updateMerchant(m.id, { tags: next });
+      reload();
+    } catch (err) { toast.error(err?.data?.message || 'Could not update tags'); }
+  };
+  p.body.querySelector('.js-tag-add')?.addEventListener('click', () => {
+    const inp = p.body.querySelector('.js-tag-input');
+    const v = inp.value.trim();
+    if (!v) return;
+    saveTags([...new Set([...tags, ...v.split(',').map((x) => x.trim()).filter(Boolean)])]);
+  });
+  p.body.querySelector('.js-tag-input')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); p.body.querySelector('.js-tag-add').click(); } });
+  p.body.querySelectorAll('.js-untag').forEach((b) => b.addEventListener('click', () => saveTags(tags.filter((t) => t !== b.dataset.t))));
+  p.body.querySelector('.js-note-add')?.addEventListener('click', async () => {
+    const inp = p.body.querySelector('.js-note-input');
+    const text = inp.value.trim();
+    if (!text) return;
+    try {
+      await platformService.addMerchantNote(m.id, text);
+      toast.success('Note added');
+      reload();
+    } catch (err) { toast.error(err?.data?.message || 'Could not add note'); }
+  });
+  p.body.querySelectorAll('.js-note-del').forEach((b) => b.addEventListener('click', async () => {
+    if (!(await confirmDialog({ title: 'Delete this note?', confirmLabel: 'Delete', danger: true }))) return;
+    await platformService.deleteMerchantNote(m.id, b.dataset.id);
+    reload();
+  }));
+
   if ((d.branchRequests || []).length) {
     p.body.insertAdjacentHTML('beforeend', `
       <h3 class="sa-h3">Additional branch purchases (${d.branchRequests.length})</h3>
@@ -142,6 +201,25 @@ export default async function merchantDetailPage(ctx, mount) {
     await platformService.updateMerchant(m.id, { status });
     toast.success(status === 'suspended' ? 'Merchant suspended' : 'Merchant reactivated');
     reload();
+  }
+
+  function sendMessage() {
+    const dlg = openModal({ title: `Message ${d.business?.name || m.name}`, size: 'sm', body: '<div></div>' });
+    createForm(dlg.$('.modal__body'), {
+      fields: [
+        { name: 'title', label: 'Subject', value: 'Message from POS TXbd' },
+        { name: 'message', label: 'Message', type: 'textarea', rows: 4, required: true, hint: 'Shown in the merchant’s notification bell.' },
+        { name: 'level', label: 'Importance', type: 'select', value: 'info', options: [{ value: 'info', label: 'Normal' }, { value: 'warning', label: 'Important' }] },
+      ],
+      submitLabel: 'Send message',
+      onCancel: () => dlg.close(),
+      onSubmit: async (v) => {
+        await platformService.messageMerchant(m.id, v);
+        dlg.close();
+        toast.success('Message sent to the merchant');
+        reload();
+      },
+    });
   }
 
   function recordPayment() {
