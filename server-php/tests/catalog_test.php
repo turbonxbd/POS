@@ -122,6 +122,36 @@ test('inventory: adjustment decreases stock; below-zero is blocked (409)', funct
     expect_eq($row['quantity'], 7);
 });
 
+test('inventory: reorder report lists low products and a partial minStock PATCH lifts them off', function () {
+    $kit = new TestKit();
+    $s = $kit->loginAs();
+    $p = authed($kit, $s, 'POST', '/api/products', ['json' => [
+        'name' => 'Reorder Me', 'sku' => 'REO-1', 'barcode' => '2000000000178', 'costPrice' => 300, 'sellingPrice' => 500,
+        'minStock' => 10, 'branchStock' => [['branchId' => $kit->branchId, 'qty' => 4]],
+    ]])['body'];
+
+    $list = authed($kit, $s, 'GET', '/api/inventory/reorder', ['query' => ['pageSize' => 'all']])['body'];
+    $row = null;
+    foreach ($list['data'] as $r) {
+        if ($r['productId'] === $p['id']) {
+            $row = $r;
+        }
+    }
+    expect($row !== null, 'low product on the reorder report');
+    expect_eq($row['onHand'], 4);
+    expect($row['suggestedQty'] > 0, 'suggests an order qty');
+    expect($list['summary']['itemsToReorder'] >= 1, 'summary counts the item');
+    expect(is_array($list['summary']['suppliers']), 'summary groups by supplier');
+
+    $patch = authed($kit, $s, 'PATCH', '/api/products/' . $p['id'], ['json' => ['minStock' => 2]]);
+    expect_eq($patch['status'], 200, json_encode($patch['body']));
+    $after = authed($kit, $s, 'GET', '/api/inventory/reorder', ['query' => ['pageSize' => 'all']])['body'];
+    foreach ($after['data'] as $r) {
+        expect($r['productId'] !== $p['id'], 'raised reorder level removes it from the report');
+    }
+    expect_eq(authed($kit, $s, 'GET', '/api/products/' . $p['id'])['body']['name'], 'Reorder Me');
+});
+
 test('inventory: transfer moves stock between two branches', function () {
     $kit = new TestKit();
     $s = $kit->loginAs();

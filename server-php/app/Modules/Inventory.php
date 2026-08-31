@@ -28,7 +28,84 @@ final class Inventory
         $r->post('/inventory/adjustments', fn (Context $c) => self::createAdjustment($c));
         $r->get('/inventory/transfers', fn (Context $c) => self::listTransfers($c));
         $r->post('/inventory/transfers', fn (Context $c) => self::createTransfer($c));
+        $r->get('/inventory/reorder', fn (Context $c) => self::reorder($c));
         $r->get('/inventory/valuation', fn (Context $c) => self::valuation($c));
+    }
+
+    private static function reorder(Context $ctx): Response
+    {
+        $ctx->requirePermission('inventory.view');
+        $q = $ctx->request->query;
+        $branches = $ctx->repo()->allDocs('branches', 'archived_at IS NULL', [], 'name ASC');
+        $scope = !empty($q['branchId']) && $q['branchId'] !== 'all' ? $q['branchId'] : null;
+        $branchList = $scope ? array_values(array_filter($branches, static fn ($b) => $b['id'] === $scope)) : $branches;
+        $products = $ctx->repo()->allDocs('products', "archived_at IS NULL AND track_inventory = 1", [], 'name ASC');
+
+        $rows = [];
+        foreach ($products as $p) {
+            $supplierName = !empty($p['supplierId']) ? ($ctx->repo()->doc('suppliers', $p['supplierId'])['name'] ?? null) : null;
+            $targets = !empty($p['variants'])
+                ? array_map(static fn ($v) => ['variantId' => $v['id'], 'label' => $v['name'] ?: $v['sku'], 'sku' => $v['sku'], 'min' => (int) ($v['minStock'] ?? $p['minStock'] ?? 0), 'cost' => (int) ($v['costPrice'] ?? 0)], $p['variants'])
+                : [['variantId' => null, 'label' => null, 'sku' => $p['sku'] ?? null, 'min' => (int) ($p['minStock'] ?? 0), 'cost' => (int) ($p['costPrice'] ?? 0)]];
+            foreach ($targets as $t) {
+                if ($t['min'] <= 0) {
+                    continue;
+                }
+                $onHand = 0;
+                $avgCost = $t['cost'];
+                $byBranch = [];
+                foreach ($branchList as $b) {
+                    $s = $ctx->repo()->doc('stock', Ledger::stockId($b['id'], $p['id'], $t['variantId']));
+                    $qq = (int) ($s['quantity'] ?? 0);
+                    $onHand += $qq;
+                    if (!empty($s['avgCost'])) {
+                        $avgCost = (int) $s['avgCost'];
+                    }
+                    $byBranch[] = ['branchId' => $b['id'], 'branchName' => $b['name'], 'quantity' => $qq];
+                }
+                if ($onHand > $t['min']) {
+                    continue;
+                }
+                $target = !empty($p['maxStock']) && $p['maxStock'] > $t['min'] ? (int) $p['maxStock'] : $t['min'] * 2;
+                $suggested = max(0, $target - $onHand);
+                $rows[] = [
+                    'id' => $p['id'] . ':' . ($t['variantId'] ?: 'base'),
+                    'productId' => $p['id'], 'variantId' => $t['variantId'],
+                    'name' => $p['name'], 'variantLabel' => $t['label'], 'sku' => $t['sku'],
+                    'supplierId' => $p['supplierId'] ?? null, 'supplierName' => $supplierName,
+                    'reorderLevel' => $t['min'], 'onHand' => $onHand, 'byBranch' => $byBranch,
+                    'avgCost' => $avgCost, 'suggestedQty' => $suggested,
+                    'restockCost' => Money::mul($avgCost, $suggested),
+                    'status' => $onHand <= 0 ? 'out_of_stock' : 'low_stock',
+                ];
+            }
+        }
+
+        $filtered = $rows;
+        if (!empty($q['supplierId']) && $q['supplierId'] !== 'all') {
+            $filtered = array_values(array_filter($filtered, static fn ($r) => $q['supplierId'] === 'none' ? empty($r['supplierId']) : $r['supplierId'] === $q['supplierId']));
+        }
+        if (!empty($q['status']) && $q['status'] !== 'all') {
+            $filtered = array_values(array_filter($filtered, static fn ($r) => $r['status'] === $q['status']));
+        }
+        $result = self::paginate($filtered, $q, ['name', 'sku', 'variantLabel', 'supplierName'], ['name', 'onHand', 'reorderLevel', 'suggestedQty', 'restockCost', 'supplierName'], 'restockCost', 'desc');
+
+        $suppliers = [];
+        foreach ($rows as $r) {
+            $key = $r['supplierId'] ?: 'none';
+            $acc = $suppliers[$key] ?? ['supplierId' => $r['supplierId'] ?: null, 'supplierName' => $r['supplierName'] ?: 'No supplier', 'lines' => 0, 'cost' => 0];
+            $acc['lines']++;
+            $acc['cost'] += $r['restockCost'];
+            $suppliers[$key] = $acc;
+        }
+        usort($suppliers, static fn ($a, $b) => $b['cost'] <=> $a['cost']);
+        $result['summary'] = [
+            'itemsToReorder' => count($rows),
+            'outOfStock' => count(array_filter($rows, static fn ($r) => $r['status'] === 'out_of_stock')),
+            'estimatedCost' => array_sum(array_column($rows, 'restockCost')),
+            'suppliers' => array_values($suppliers),
+        ];
+        return Response::json($result);
     }
 
     private static function overview(Context $ctx): Response

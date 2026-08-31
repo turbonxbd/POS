@@ -166,6 +166,39 @@ for (const [name, path, ctx] of [
   }
 }
 
+// inventory: the Reorder tab renders and can set a reorder level
+{
+  errs.length = 0;
+  mount.replaceChildren();
+  const { db } = await import(R + 'js/core/db.js');
+  const prod = db.collection('products').all().find((p) => p.trackInventory !== false && !p.archivedAt && !(p.variants || []).length) || aProd;
+  db.collection('products').update(prod.id, { minStock: 999999 }); // force it onto the reorder list
+  const mod = await import(R + 'js/pages/admin/inventory.js');
+  await mod.default({ params: {}, query: {} }, mount);
+  await sleep(60);
+  const reorderTab = [...mount.querySelectorAll('.tabs button, [role="tab"], .tab')].find((b) => /reorder/i.test(b.textContent));
+  T('inventory: a Reorder tab is present', !!reorderTab, [...mount.querySelectorAll('.tabs button')].map((b) => b.textContent).join('|'));
+  if (reorderTab) {
+    reorderTab.click();
+    for (let i = 0; i < 30 && !mount.querySelector('table'); i++) await sleep(50);
+    const table = mount.querySelector('table');
+    const iErrs = errs.filter((e) => !e.includes('[chart]'));
+    T('inventory: the Reorder tab renders a table', !!table && iErrs.length === 0, iErrs[0] || 'no table');
+    const searchBox = mount.querySelector('input[type="search"], input[placeholder*="Search" i]');
+    if (searchBox) {
+      searchBox.value = prod.name;
+      searchBox.dispatchEvent(new window.Event('input', { bubbles: true }));
+    }
+    for (let i = 0; i < 30 && ![...mount.querySelectorAll('td a')].some((a) => a.textContent.includes(prod.name)); i++) await sleep(50);
+    const rowLink = [...mount.querySelectorAll('td a')].find((a) => a.textContent.includes(prod.name));
+    T('inventory: the forced-low product is on the reorder list', !!rowLink, prod.name);
+  } else {
+    T('inventory: the Reorder tab renders a table', true, 'skipped');
+    T('inventory: the forced-low product is on the reorder list', true, 'skipped');
+  }
+  db.collection('products').update(prod.id, { minStock: prod.minStock || 0 });
+}
+
 // POS
 errs.length = 0;
 const posMount = document.getElementById('pos-root');

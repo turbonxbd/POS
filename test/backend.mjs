@@ -123,6 +123,24 @@ await step('inventory', async () => {
   T('valuation computes', (await http.get('/inventory/valuation', { params: { branchId: B } })).summary.totalCostValue > 0);
 });
 
+// ---- reorder / low-stock report ----
+await step('reorder report', async () => {
+  const rp = await http.post('/products', { branchId: B, name: 'QA Reorder Item', sellingPrice: 5000, costPrice: 3000, unit: 'pcs', openingStock: 4, minStock: 10 });
+  const list = await http.get('/inventory/reorder', { params: { pageSize: 'all' } });
+  const row = list.data.find((r) => r.productId === rp.id);
+  T('low product appears on the reorder report', !!row);
+  T('reorder row reports on-hand across branches', row.onHand === 4, String(row?.onHand));
+  T('reorder row suggests an order quantity', row.suggestedQty > 0, String(row?.suggestedQty));
+  T('reorder summary counts the item', list.summary.itemsToReorder >= 1);
+  T('reorder summary groups by supplier', Array.isArray(list.summary.suppliers));
+
+  // partial PATCH of just { minStock } is allowed and lifts it off the list
+  await http.patch('/products/' + rp.id, { minStock: 2 });
+  const after = await http.get('/inventory/reorder', { params: { pageSize: 'all' } });
+  T('raising the reorder level removes it from the report', !after.data.some((r) => r.productId === rp.id));
+  T('partial minStock PATCH kept the rest of the product', (await http.get('/products/' + rp.id, { params: { branchId: B } })).name === 'QA Reorder Item');
+});
+
 // ---- purchasing ----
 await step('purchasing', async () => {
   const sup = (await http.get('/suppliers', { params: { pageSize: 1 } })).data[0];

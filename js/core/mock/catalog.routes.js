@@ -304,7 +304,8 @@ export default function register(router) {
   router.patch('/products/:id', ({ params, body }) => {
     const existing = tdb('products').get(params.id);
     if (!existing) notFound('Product');
-    validateProductPayload(body || {}, { existingId: params.id });
+    // validate the merged result so a partial PATCH (e.g. just { minStock }) is allowed
+    validateProductPayload({ ...existing, ...body }, { existingId: params.id });
     const doc = normalizeProduct({ ...existing, ...body }, existing);
     return db.tx(() => {
       const row = tdb('products').update(params.id, doc);

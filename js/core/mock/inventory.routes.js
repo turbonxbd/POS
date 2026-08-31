@@ -180,6 +180,81 @@ export default function register(router) {
     });
   });
 
+  /* --------------------------------------------- reorder / low-stock report */
+  router.get('/inventory/reorder', ({ query }) => {
+    const branches = tdb('branches').all().filter((b) => !b.archivedAt);
+    const scopeBranch = query.branchId && query.branchId !== 'all' ? query.branchId : null;
+    const branchList = scopeBranch ? branches.filter((b) => b.id === scopeBranch) : branches;
+    const products = tdb('products').all().filter((p) => !p.archivedAt && p.trackInventory !== false);
+    const rows = [];
+    for (const p of products) {
+      const supplierName = p.supplierId ? tdb('suppliers').get(p.supplierId)?.name || null : null;
+      const targets = p.variants?.length
+        ? p.variants.map((v) => ({ variantId: v.id, label: variantName(p, v.id), sku: v.sku, min: Number(v.minStock ?? p.minStock) || 0, cost: v.costPrice }))
+        : [{ variantId: null, label: null, sku: p.sku, min: Number(p.minStock) || 0, cost: p.costPrice }];
+      for (const t of targets) {
+        if (t.min <= 0) continue; // only lines with a reorder level set
+        let onHand = 0;
+        let avgCost = t.cost || 0;
+        const byBranch = [];
+        for (const b of branchList) {
+          const s = tdb('stock').get(`stk_${b.id}_${p.id}_${t.variantId || 'base'}`);
+          const q = s?.quantity || 0;
+          onHand += q;
+          if (s?.avgCost) avgCost = s.avgCost;
+          byBranch.push({ branchId: b.id, branchName: b.name, quantity: q });
+        }
+        if (onHand > t.min) continue;
+        const target = p.maxStock && p.maxStock > t.min ? p.maxStock : t.min * 2;
+        const suggestedQty = Math.max(0, target - onHand);
+        rows.push({
+          id: `${p.id}:${t.variantId || 'base'}`,
+          productId: p.id,
+          variantId: t.variantId,
+          name: p.name,
+          variantLabel: t.label,
+          sku: t.sku || null,
+          supplierId: p.supplierId || null,
+          supplierName,
+          reorderLevel: t.min,
+          onHand,
+          byBranch,
+          avgCost,
+          suggestedQty,
+          restockCost: money.mul(avgCost, suggestedQty),
+          status: onHand <= 0 ? 'out_of_stock' : 'low_stock',
+        });
+      }
+    }
+    let filtered = rows;
+    if (query.supplierId && query.supplierId !== 'all') {
+      filtered = filtered.filter((r) => (query.supplierId === 'none' ? !r.supplierId : r.supplierId === query.supplierId));
+    }
+    if (query.status && query.status !== 'all') filtered = filtered.filter((r) => r.status === query.status);
+    const result = applyListQuery(filtered, query, {
+      searchable: ['name', 'sku', 'variantLabel', 'supplierName'],
+      sortable: ['name', 'onHand', 'reorderLevel', 'suggestedQty', 'restockCost', 'supplierName'],
+      defaultSort: 'restockCost', defaultDir: 'desc',
+    });
+    const suppliers = new Map();
+    for (const r of rows) {
+      const key = r.supplierId || 'none';
+      const acc = suppliers.get(key) || { supplierId: r.supplierId || null, supplierName: r.supplierName || 'No supplier', lines: 0, cost: 0 };
+      acc.lines += 1;
+      acc.cost += r.restockCost;
+      suppliers.set(key, acc);
+    }
+    return ok({
+      ...result,
+      summary: {
+        itemsToReorder: rows.length,
+        outOfStock: rows.filter((r) => r.status === 'out_of_stock').length,
+        estimatedCost: rows.reduce((s, r) => s + r.restockCost, 0),
+        suppliers: [...suppliers.values()].sort((a, b) => b.cost - a.cost),
+      },
+    });
+  });
+
   /* -------------------------------------------------------- valuation */
   router.get('/inventory/valuation', ({ query }) => {
     const branchId = query.branchId || resolveBranchId();

@@ -186,7 +186,8 @@ final class Catalog
         $ctx->requirePermission('products.edit');
         $existing = $ctx->repo()->doc('products', $p['id']) ?? throw HttpError::notFound('Product');
         $body = $ctx->body();
-        self::validate($ctx, $body, $p['id']);
+        // validate the merged result so a partial PATCH (e.g. just { minStock }) is allowed
+        self::validate($ctx, array_merge($existing, $body), $p['id']);
         $doc = self::normalize(array_merge($existing, $body), $existing);
 
         return $ctx->db->transaction(function () use ($ctx, $p, $doc, $existing) {

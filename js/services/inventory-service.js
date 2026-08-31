@@ -34,6 +34,14 @@ export const inventoryService = {
     requirePermission('inventory.valuation');
     return http.get('/inventory/valuation', { params: withBranch(params) });
   },
+  getReorderList(params = {}) {
+    requirePermission('inventory.view');
+    return http.get('/inventory/reorder', { params });
+  },
+  setReorderLevel(productId, minStock) {
+    requirePermission('products.edit');
+    return http.patch(`/products/${productId}`, { minStock });
+  },
 };
 
 export default inventoryService;
