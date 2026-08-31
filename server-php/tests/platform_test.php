@@ -277,3 +277,41 @@ test('platform: dashboard + merchants + subscription lifecycle + revenue', funct
     // and an unauthenticated caller is rejected by the router-level guard
     expect_eq($kit->request('GET', '/api/platform/dashboard', [])['status'], 401);
 });
+
+test('platform backups: list + download + delete + traversal guard', function () {
+    $kit = new TestKit();
+    $owner = $kit->loginAs();
+    $admin = $kit->loginPlatform();
+
+    // merchant owner + anon are blocked
+    expect_eq(authed($kit, $owner, 'GET', '/api/platform/backups', [])['status'], 403);
+    expect_eq($kit->request('GET', '/api/platform/backups', [])['status'], 401);
+
+    $list = authed($kit, $admin, 'GET', '/api/platform/backups', []);
+    expect_eq($list['status'], 200);
+    expect(is_array($list['body']['files']));
+    expect(array_key_exists('dir', $list['body']));
+
+    // drop a dump file straight into the backup dir, then exercise list/download/delete
+    $dir = $list['body']['dir'];
+    @mkdir($dir, 0775, true);
+    $name = 'afia-pos_2026-01-01_000000.sql';
+    file_put_contents("$dir/$name", "-- test dump\nINSERT INTO x VALUES (1);\n");
+
+    $list2 = authed($kit, $admin, 'GET', '/api/platform/backups', []);
+    expect(in_array($name, array_column($list2['body']['files'], 'name'), true));
+
+    // path traversal is rejected
+    expect(in_array(authed($kit, $admin, 'GET', '/api/platform/backups/download', ['query' => ['file' => '../config/config.php']])['status'], [400, 422], true));
+    expect(in_array(authed($kit, $admin, 'GET', '/api/platform/backups/download', ['query' => ['file' => 'nope.sql']])['status'], [400, 404, 422], true));
+
+    $dl = authed($kit, $admin, 'GET', '/api/platform/backups/download', ['query' => ['file' => $name]]);
+    expect_eq($dl['status'], 200);
+
+    $del = authed($kit, $admin, 'DELETE', '/api/platform/backups', ['query' => ['file' => $name]]);
+    expect_eq($del['status'], 200);
+    expect(!file_exists("$dir/$name"));
+
+    // run is routed + guarded (its subprocess may fail in the sandbox — that's fine)
+    expect(in_array(authed($kit, $admin, 'POST', '/api/platform/backups/run', [])['status'], [200, 409], true));
+});

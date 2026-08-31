@@ -18,18 +18,30 @@ export default async function backupPage(ctx, mount) {
     title: 'Backup / Data Management',
     subtitle: 'Export your full dataset, restore from a backup, or reset the demo.',
   });
+  let auto = null;
+  try { auto = await import('../../core/backup-auto.js'); } catch { /* ignore */ }
   render();
 
-  function render() {
+  async function render() {
     const stats = db.stats();
+    const autoStatus = auto?.autoBackupStatus?.() || { supported: false };
+    const autoSnaps = auto?.supported !== false && auto?.listSnapshots ? await auto.listSnapshots().catch(() => []) : [];
+    const lastSnap = autoSnaps[0];
     shell.body.innerHTML = `
       ${statStrip([
         { label: 'Documents', value: stats.totalDocuments },
         { label: 'Collections', value: Object.keys(stats.collections).length },
         { label: 'Local storage used', value: fileSize(stats.storageBytes) },
         { label: 'Data seeded', value: stats.meta.seededAt ? fmtDateTime(stats.meta.seededAt) : '—' },
-        { label: 'Mode', value: stats.meta.demo ? 'Demo data' : 'Live data' },
+        { label: 'Auto-backup', value: autoStatus.supported ? (lastSnap ? fmtDateTime(lastSnap.at) : 'starting…') : 'off' },
       ])}
+      ${autoStatus.supported ? `<div class="alert alert--info" style="margin-top:var(--sp-4)"><div class="alert__body text-sm">
+        <strong>Automatic backups are on.</strong> A full snapshot is saved to this browser every
+        ${Math.round(autoStatus.everyMs / 60000)} minutes and when you close the tab (newest ${autoStatus.keep} kept).
+        ${lastSnap ? `Last snapshot: <strong>${fmtDateTime(lastSnap.at)}</strong>.` : ''}
+        Still <strong>download a copy</strong> below and keep it off this device.
+        ${autoSnaps.length ? `<button class="btn btn--ghost btn--sm js-dl-auto" style="margin-left:var(--sp-2)">Download latest snapshot</button>` : ''}
+      </div></div>` : ''}
       <div class="field-grid" style="margin-top:var(--sp-4)">
         <div class="card card--pad">
           <div class="form-section-title">Export</div>
@@ -59,8 +71,15 @@ export default async function backupPage(ctx, mount) {
 
     shell.body.querySelector('#export').addEventListener('click', async () => {
       const data = await backupService.exportData();
-      download(`afia-pos-backup-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.json`, JSON.stringify(data, null, 2), 'application/json');
+      download(`postxbd-backup-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.json`, JSON.stringify(data, null, 2), 'application/json');
       toast.success('Backup downloaded');
+    });
+
+    shell.body.querySelector('.js-dl-auto')?.addEventListener('click', async () => {
+      const json = await auto.readSnapshot(lastSnap.at);
+      if (!json) { toast.error('That snapshot could not be read.'); return; }
+      download(`postxbd-auto-backup-${lastSnap.at.replace(/[:.]/g, '-')}.json`, json, 'application/json');
+      toast.success('Snapshot downloaded');
     });
 
     shell.body.querySelector('#import').addEventListener('change', async (e) => {

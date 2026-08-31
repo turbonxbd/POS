@@ -43,6 +43,11 @@ export const platformService = {
   support: (params = {}) => http.get('/platform/support', { params }),
   replySupport: (id, text) => http.post(`/platform/support/${id}/reply`, { text }),
   setSupportStatus: (id, status) => http.patch(`/platform/support/${id}`, { status }),
+
+  // server-side backups (rest deployment only)
+  backups: () => http.get('/platform/backups'),
+  runBackup: () => http.post('/platform/backups/run'),
+  deleteBackup: (file) => http.del(`/platform/backups?file=${encodeURIComponent(file)}`),
 };
 
 export default platformService;

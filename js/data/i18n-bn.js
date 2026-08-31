@@ -987,6 +987,13 @@ export const BN = {
     'Backup / restore data': 'ডেটা ব্যাকআপ / পুনরুদ্ধার',
     'Backup downloaded': 'ব্যাকআপ ডাউনলোড হয়েছে',
     'Backup restored': 'ব্যাকআপ পুনরুদ্ধার হয়েছে',
+    'Backups': 'ব্যাকআপ',
+    'Back up now': 'এখনই ব্যাকআপ নিন',
+    'Automatic backups are on.': 'স্বয়ংক্রিয় ব্যাকআপ চালু আছে।',
+    'Download latest snapshot': 'সর্বশেষ স্ন্যাপশট ডাউনলোড করুন',
+    'Snapshot saved': 'স্ন্যাপশট সংরক্ষিত হয়েছে',
+    'Snapshot downloaded': 'স্ন্যাপশট ডাউনলোড হয়েছে',
+    'Data restored from snapshot': 'স্ন্যাপশট থেকে ডেটা পুনরুদ্ধার হয়েছে',
     'Download backup (.json)': 'ব্যাকআপ ডাউনলোড (.json)',
     'Download a complete JSON snapshot of every record. Store it somewhere safe.':
       'প্রতিটি রেকর্ডের একটি সম্পূর্ণ JSON স্ন্যাপশট ডাউনলোড করুন। নিরাপদ কোথাও রাখুন।',

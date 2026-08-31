@@ -55,6 +55,97 @@ final class Platform
         $r->get('/platform/approvals', fn (Context $c) => self::approvals($c));
         $r->post('/platform/approvals/:merchantId/approve', fn (Context $c, $p) => self::approve($c, $p));
         $r->post('/platform/approvals/:merchantId/reject', fn (Context $c, $p) => self::reject($c, $p));
+
+        $r->get('/platform/backups', fn (Context $c) => self::listBackups($c));
+        $r->post('/platform/backups/run', fn (Context $c) => self::runBackup($c));
+        $r->get('/platform/backups/download', fn (Context $c) => self::downloadBackup($c));
+        $r->delete('/platform/backups', fn (Context $c) => self::deleteBackup($c));
+    }
+
+    /* --------------------------------------------------------- backups */
+
+    private static function backupDir(Context $ctx): string
+    {
+        $dir = rtrim((string) ($ctx->config['app']['storage_dir'] ?? (getcwd() . '/storage')), '/') . '/backups';
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0775, true);
+        }
+        return $dir;
+    }
+
+    /** Resolve a client-supplied file name to a safe path inside the backup dir. */
+    private static function backupPath(Context $ctx, string $name): string
+    {
+        $name = basename(trim($name));
+        if ($name === '' || !preg_match('/^[A-Za-z0-9._-]+\.(sql|json|gz)$/', $name)) {
+            throw HttpError::badRequest('Invalid backup file name.');
+        }
+        $path = self::backupDir($ctx) . '/' . $name;
+        if (!is_file($path)) {
+            throw HttpError::notFound('Backup');
+        }
+        return $path;
+    }
+
+    private static function listBackups(Context $ctx): Response
+    {
+        $dir = self::backupDir($ctx);
+        $files = [];
+        foreach (glob($dir . '/*.{sql,json,gz}', GLOB_BRACE) ?: [] as $f) {
+            $files[] = [
+                'name' => basename($f),
+                'bytes' => filesize($f) ?: 0,
+                'at' => date('c', filemtime($f) ?: time()),
+            ];
+        }
+        usort($files, static fn ($a, $b) => strcmp($b['at'], $a['at']));
+
+        $cron = trim((string) @shell_exec('command -v mysqldump')) !== '';
+        return Response::json([
+            'files' => $files,
+            'dir' => $dir,
+            'mysqldump' => $cron,
+            'retain' => 14,
+            'note' => 'Wire bin/backup.php to a daily cron (hPanel -> Advanced -> Cron Jobs) and copy these dumps off-server.',
+        ]);
+    }
+
+    private static function runBackup(Context $ctx): Response
+    {
+        $script = dirname(__DIR__, 2) . '/bin/backup.php';
+        if (!is_file($script)) {
+            throw HttpError::conflict('Backup script not found on the server.');
+        }
+        $php = PHP_BINARY ?: 'php';
+        $out = [];
+        $code = 0;
+        exec(escapeshellarg($php) . ' ' . escapeshellarg($script) . ' 2>&1', $out, $code);
+        Audit::record($ctx, 'settings', 'backup', null, ['meta' => ['action' => 'run', 'exit' => $code]]);
+        if ($code !== 0) {
+            throw HttpError::conflict('Backup failed: ' . implode(' ', array_slice($out, -3)));
+        }
+        return Response::json(['ok' => true, 'output' => implode("\n", $out)]);
+    }
+
+    private static function downloadBackup(Context $ctx): Response
+    {
+        $path = self::backupPath($ctx, (string) ($ctx->request->query['file'] ?? ''));
+        Audit::record($ctx, 'settings', 'backup', null, ['meta' => ['action' => 'download', 'file' => basename($path)]]);
+        $r = new Response(200, null, [
+            'Content-Type' => 'application/octet-stream',
+            'Content-Disposition' => 'attachment; filename="' . basename($path) . '"',
+            'Content-Length' => (string) (filesize($path) ?: 0),
+        ]);
+        $r->raw = (string) file_get_contents($path);
+        return $r;
+    }
+
+    private static function deleteBackup(Context $ctx): Response
+    {
+        $path = self::backupPath($ctx, (string) ($ctx->request->query['file'] ?? ''));
+        @unlink($path);
+        Audit::record($ctx, 'settings', 'backup', null, ['meta' => ['action' => 'delete', 'file' => basename($path)]]);
+        return Response::json(['ok' => true]);
     }
 
     /* -------------------------------------------------- approvals inbox */

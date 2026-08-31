@@ -144,6 +144,22 @@ details in **Settings**, and review the plan prices in **Plans**.
 0 2 * * *   php /home/uXXXX/bin/backup.php
 ```
 
+Writes a full DB dump to `storage/backups/` daily and keeps the newest 14
+(`mysqldump` when available, portable PHP dump otherwise). **Also copy those
+files off the server** — a nightly rsync/SFTP to a second host or a cloud drive,
+or point the cron at a script that uploads after dumping. A backup that only
+lives on the same disk as the database is not a backup.
+
+**Super Admin → Backups** shows every dump with its size + age, and offers
+*Back up now* (runs the script), *Download*, and *Delete*. The merchant panel's
+**Settings → Backup** still does per-merchant JSON export/import.
+
+In the browser-only (mock) build there is no server: `js/core/backup-auto.js`
+keeps the newest 5 full snapshots of the whole dataset in IndexedDB (auto every
+5 min + on tab close) and the same Super Admin → Backups page restores from
+them. Deploy this PHP backend for a real multi-merchant product — the mock
+stores each merchant's data in that merchant's own browser only.
+
 ## Local development / tests
 
 Needs PHP 8.1+ with `pdo_sqlite` (bundled). No MySQL required.

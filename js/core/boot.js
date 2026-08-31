@@ -68,6 +68,9 @@ export function boot({ seedIfEmpty = true } = {}) {
     }
 
     syncQueue.start();
+    if (config.api.mode === 'mock') {
+      import('./backup-auto.js').then((m) => m.startAutoBackup()).catch(() => {});
+    }
     registerServiceWorker();
     try {
       initI18n();

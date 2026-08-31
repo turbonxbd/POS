@@ -187,6 +187,7 @@ const R = '../';
     ['#/revenue', '.kpi-grid, .sa-bars'],
     ['#/support', '#sa-body'],
     ['#/chat', '.sa-chat'],
+    ['#/backups', '.sa-tablecard, .sa-card'],
     ['#/settings', '#sec-contact'],
   ];
   for (const [hash, sel] of routes) {
