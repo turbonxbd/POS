@@ -2,13 +2,16 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [main, master]
+    # Deploy from `master` only. `main` is kept as a mirror; the github-pages
+    # environment only accepts deployments from this one branch, and triggering
+    # on both made half the runs fail + cancel each other.
+    branches: [master]
   workflow_dispatch:
 
-# Allow one concurrent deployment; let a newer run replace an in-progress one.
+# One deployment at a time; a newer push supersedes an in-progress run.
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 permissions:
   contents: read
