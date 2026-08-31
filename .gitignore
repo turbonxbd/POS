@@ -1,0 +1,54 @@
+# Dependencies (the app needs none; test/ uses jsdom as a dev-only dep)
+node_modules/
+bower_components/
+
+# Environment & secrets — NEVER commit
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets.json
+credentials.json
+config.local.js
+
+# Build / cache
+dist/
+build/
+.cache/
+.parcel-cache/
+*.tsbuildinfo
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*
+logs/
+
+# Local runtime data dumps (exported backups)
+backups/
+*.pos-backup.json
+
+# Scratch / throwaway dev files (never source)
+_*.mjs
+_*.html
+_*.txt
+*.original.md
+
+# Stray screenshots / photos at the repo root
+/screenshot*.png
+/Screenshot*.png
+/IMG_*.jpg
+/IMG*.jpg
+
+# Accidental nested clone of the deploy repo
+/POS/

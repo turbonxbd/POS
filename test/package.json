@@ -1,0 +1,12 @@
+{
+  "name": "afia-pos-tests",
+  "private": true,
+  "type": "module",
+  "description": "Node smoke tests for POS TXbd. The app itself has zero dependencies.",
+  "scripts": {
+    "test": "node run.mjs"
+  },
+  "devDependencies": {
+    "jsdom": "^24.0.0"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "name": "POS TXbd — Point of Sale",
+  "short_name": "POS TXbd",
+  "description": "Multi-tenant web point-of-sale for retail — fast checkout, live inventory, reporting, subscriptions.",
+  "start_url": "index.html",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0f172a",
+  "theme_color": "#5145d8",
+  "categories": ["business", "productivity", "shopping"],
+  "icons": [
+    { "src": "assets/logos/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "assets/logos/icon-maskable.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Open POS Terminal", "url": "cashier.html", "description": "Start selling" },
+    { "name": "Admin Dashboard", "url": "admin.html", "description": "Manage the shop" }
+  ]
+}

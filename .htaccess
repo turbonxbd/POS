@@ -1,0 +1,42 @@
+# POS TXbd — Apache / cPanel / Hostinger config.
+# The app is 100% static with hash routing; this file only fixes MIME types,
+# forces HTTPS, and points unknown paths back at the app. Ignored by GitHub
+# Pages / Netlify / nginx (which have their own equivalents).
+
+# --- correct MIME types -------------------------------------------------------
+AddType application/manifest+json .webmanifest
+AddType image/svg+xml             .svg
+AddType text/javascript           .mjs
+AddType font/woff2                .woff2
+
+# --- force HTTPS (needed for the camera scanner + service worker) ------------
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteCond %{HTTPS} off
+  RewriteCond %{HTTP:X-Forwarded-Proto} !https
+  RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+  # Serve real files/dirs as-is; send everything else to the app entry point
+  # so a hard refresh on any hash route still loads.
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+  RewriteRule ^ index.html [L]
+</IfModule>
+
+# --- caching ----------------------------------------------------------------
+<IfModule mod_headers.c>
+  # HTML + the service worker: always revalidate so updates ship immediately.
+  <FilesMatch "\.(html|webmanifest)$">
+    Header set Cache-Control "no-cache"
+  </FilesMatch>
+  <FilesMatch "service-worker\.js$">
+    Header set Cache-Control "no-cache"
+  </FilesMatch>
+  # Fingerprint-free static assets: cache a day (bump SW VERSION on deploy).
+  <FilesMatch "\.(css|js|mjs|svg|woff2|png|jpg|webp)$">
+    Header set Cache-Control "public, max-age=86400"
+  </FilesMatch>
+</IfModule>
+
+ErrorDocument 404 /404.html

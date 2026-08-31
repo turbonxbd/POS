@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Sign in · POS TXbd</title>
+  <link rel="icon" href="assets/logos/favicon.svg">
+  <meta name="theme-color" content="#5145d8">
+  <link rel="stylesheet" href="css/reset.css">
+  <link rel="stylesheet" href="css/tokens.css">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/responsive.css">
+  <style>
+    .auth { min-height: 100dvh; display: grid; grid-template-columns: 1fr 460px; }
+    .auth__aside {
+      background: linear-gradient(160deg, var(--brand-800), var(--brand-600) 60%, #7c5cf0);
+      color: #fff; padding: var(--sp-9); display: flex; flex-direction: column; justify-content: space-between;
+    }
+    .auth__brand { display: flex; align-items: center; gap: var(--sp-3); font-weight: 700; font-size: var(--fs-lg); }
+    .auth__brand .mark { width: 40px; height: 40px; border-radius: var(--radius-md); background: rgba(255,255,255,.16); display: grid; place-content: center; font-weight: 800; }
+    .auth__pitch h1 { color: #fff; font-size: var(--fs-4xl); line-height: 1.1; letter-spacing: -0.02em; }
+    .auth__pitch p { color: rgba(255,255,255,.82); margin-top: var(--sp-3); max-width: 40ch; }
+    .auth__features { display: grid; gap: var(--sp-3); margin-top: var(--sp-6); }
+    .auth__features li { display: flex; gap: var(--sp-2); align-items: center; color: rgba(255,255,255,.9); font-size: var(--fs-sm); list-style: none; }
+    .auth__features li::before { content: "✓"; width: 20px; height: 20px; border-radius: 50%; background: rgba(255,255,255,.18); display: grid; place-content: center; font-size: 11px; flex-shrink: 0; }
+    .auth__main { display: grid; place-items: center; padding: var(--sp-6); background: var(--bg-body); }
+    .auth__card { width: 100%; max-width: 360px; }
+    .auth__card h2 { font-size: var(--fs-2xl); }
+    .auth__card > p { color: var(--text-muted); font-size: var(--fs-sm); margin-bottom: var(--sp-6); }
+    .demo-accounts { margin-top: var(--sp-5); border-top: 1px dashed var(--border); padding-top: var(--sp-4); }
+    .demo-accounts summary { font-size: var(--fs-sm); font-weight: 600; cursor: pointer; color: var(--text-secondary); }
+    .demo-accounts button { width: 100%; text-align: left; padding: var(--sp-2) var(--sp-3); border-radius: var(--radius-sm); font-size: var(--fs-sm); display: flex; justify-content: space-between; }
+    .demo-accounts button:hover { background: var(--bg-hover); }
+    @media (max-width: 860px) { .auth { grid-template-columns: 1fr; } .auth__aside { display: none; } }
+  </style>
+</head>
+<body>
+  <a href="#login-form" class="skip-link">Skip to sign-in form</a>
+  <div class="auth">
+    <aside class="auth__aside">
+      <div class="auth__brand"><span class="mark">T</span> POS&nbsp;TXbd</div>
+      <div class="auth__pitch">
+        <h1>Run your shop, not your software.</h1>
+        <p>Fast checkout, live inventory, multi-branch stock, and reporting that reconciles — built for real retail.</p>
+        <ul class="auth__features">
+          <li>Barcode checkout in seconds</li>
+          <li>Inventory that never drifts on refresh</li>
+          <li>Role-based access for every staff member</li>
+          <li>Thermal &amp; A4 invoices, offline-ready</li>
+        </ul>
+      </div>
+      <p class="text-xs" style="color:rgba(255,255,255,.6)">© <span id="year"></span> POS TXbd</p>
+    </aside>
+
+    <main class="auth__main">
+      <div class="auth__card card card--pad">
+        <h2>Welcome back</h2>
+        <p>Sign in to your POS account</p>
+
+        <form id="login-form" class="stack" style="--stack-gap:var(--sp-4)" novalidate>
+          <div class="alert alert--danger" id="login-error" hidden>
+            <div class="alert__body"></div>
+          </div>
+          <label class="field">
+            <span class="label">Email</span>
+            <input class="input" type="email" name="email" autocomplete="username" required autofocus placeholder="you@yourbusiness.com">
+          </label>
+          <label class="field">
+            <span class="label">Password</span>
+            <input class="input" type="password" name="password" autocomplete="current-password" required placeholder="••••••••">
+          </label>
+          <label class="check"><input type="checkbox" name="remember" checked> Keep me signed in</label>
+          <button class="btn btn--primary btn--lg btn--block" type="submit">Sign in</button>
+        </form>
+
+        <details class="demo-accounts" open>
+          <summary>Demo accounts (click to fill)</summary>
+          <div class="stack" style="--stack-gap:2px;margin-top:var(--sp-2)" id="demo-list"></div>
+          <p class="text-xs muted" style="margin-top:var(--sp-2)">Password for all demo accounts: <code>demo1234</code></p>
+        </details>
+      </div>
+    </main>
+  </div>
+
+  <script type="module" src="js/app-login.js"></script>
+</body>
+</html>

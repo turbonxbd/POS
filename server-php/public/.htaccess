@@ -1,0 +1,45 @@
+# POS TXbd - Apache / LiteSpeed rules for the public web root (public_html).
+#
+# 1. Route /api/* to the PHP front controller.
+# 2. Serve the static SPA: unknown non-file paths fall back to index.html.
+# 3. Deny access to anything sensitive that might end up in the web root.
+
+Options -Indexes
+DirectoryIndex index.html
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+
+  # --- API ---------------------------------------------------------------
+  # /api and /api/anything  ->  /api/index.php  (query string preserved)
+  RewriteRule ^api(/.*)?$ api/index.php [L,QSA]
+
+  # --- Static SPA fallback ---------------------------------------------------
+  # If the request is not an existing file or directory, and not /api,
+  # serve the app shell so client-side routing (hash + history) works.
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteCond %{REQUEST_URI} !^/api
+  RewriteRule ^ index.html [L]
+</IfModule>
+
+# --- Block sensitive files even if they are uploaded here by mistake -------
+<FilesMatch "(^\.|\.(sql|sqlite|db|log|ini|sh|bak|old|dist|lock)$|composer\.(json|lock)|package(-lock)?\.json)">
+  Require all denied
+</FilesMatch>
+
+<IfModule mod_headers.c>
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set X-Frame-Options "SAMEORIGIN"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
+
+# Long-cache the fingerprint-free static assets modestly; HTML stays fresh.
+<IfModule mod_expires.c>
+  ExpiresActive On
+  ExpiresByType text/css "access plus 7 days"
+  ExpiresByType application/javascript "access plus 7 days"
+  ExpiresByType image/svg+xml "access plus 30 days"
+  ExpiresByType font/woff2 "access plus 30 days"
+  ExpiresByType text/html "access plus 0 seconds"
+</IfModule>

@@ -1,0 +1,2 @@
+# Product/category images uploaded at runtime are stored in localStorage
+# (afia_pos_media_v1), not here. This folder is for static bundled assets.

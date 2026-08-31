@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>POS TXbd · Portal</title>
+  <meta name="description" content="POS TXbd — merchant portal. Open the Admin panel or the Cashier terminal.">
+  <link rel="icon" href="assets/logos/favicon.svg">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#5145d8">
+  <link rel="stylesheet" href="css/reset.css">
+  <link rel="stylesheet" href="css/tokens.css">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/responsive.css">
+  <link rel="stylesheet" href="css/portal.css">
+</head>
+<body>
+  <div class="portal">
+    <div class="portal__inner">
+      <div class="portal__brand">
+        <span class="mark">
+          <svg width="34" height="34" viewBox="0 0 64 64" aria-hidden="true">
+            <path d="M20 45 L30 19 h4 l10 26 h-6.2 l-1.9-5.2 h-7.8 L24.2 45 Z M27.6 34.6 h6.8 L31 24.4 Z" fill="#fff"/>
+            <circle cx="44.5" cy="21" r="3" fill="#f9a8d4"/>
+          </svg>
+        </span>
+        <div>
+          <h1>POS TXbd</h1>
+          <p>Point of Sale</p>
+        </div>
+      </div>
+
+      <div class="portal__card" id="portal-card">
+        <div class="loading-block"><span class="spinner"></span><span>Loading…</span></div>
+      </div>
+
+      <div class="portal__foot">
+        <button id="theme-toggle" type="button">Theme</button>
+        <span>·</span>
+        <span id="portal-version">POS TXbd</span>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="js/app-portal.js"></script>
+</body>
+</html>

@@ -1,0 +1,145 @@
+/* ==========================================================================
+   print.css - receipt & invoice print layouts
+   Screen preview uses .receipt-preview wrapper; @media print isolates output.
+   ========================================================================== */
+
+/* ---- On-screen print preview surface ---- */
+.receipt-preview {
+  background: #fff;
+  color: #000;
+  margin: 0 auto;
+  box-shadow: var(--shadow-lg);
+  font-family: var(--font-mono);
+}
+.receipt-preview.size-58 { width: 58mm; padding: 3mm; font-size: 10px; }
+.receipt-preview.size-80 { width: 80mm; padding: 4mm; font-size: 11px; }
+.receipt-preview.size-a4 {
+  width: 210mm;
+  min-height: 297mm;
+  padding: 16mm;
+  font-family: var(--font-sans);
+  font-size: 12px;
+}
+
+/* ---- Shared receipt structure ---- */
+.rcpt { color: #000; }
+.rcpt * { color: #000 !important; }
+.rcpt__center { text-align: center; }
+.rcpt__logo { max-width: 40mm; margin: 0 auto 2mm; }
+.rcpt__biz-name { font-size: 1.3em; font-weight: 700; }
+.rcpt__biz-meta { font-size: 0.9em; line-height: 1.35; }
+.rcpt__hr { border: none; border-top: 1px dashed #000; margin: 2mm 0; }
+.rcpt__row { display: flex; justify-content: space-between; gap: 4mm; font-size: 0.95em; }
+.rcpt__meta-grid { font-size: 0.9em; }
+.rcpt table { width: 100%; font-size: 0.92em; }
+.rcpt table th {
+  text-align: left;
+  border-bottom: 1px solid #000;
+  padding: 1mm 0;
+  font-size: 0.9em;
+}
+.rcpt table td { padding: 0.8mm 0; vertical-align: top; }
+.rcpt table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.rcpt__totals { margin-top: 2mm; }
+.rcpt__totals .rcpt__row { padding: 0.6mm 0; }
+.rcpt__grand {
+  font-size: 1.15em;
+  font-weight: 700;
+  border-top: 1px solid #000;
+  border-bottom: 1px solid #000;
+  padding: 1mm 0;
+  margin: 1mm 0;
+}
+.rcpt__thanks { text-align: center; margin-top: 3mm; font-size: 0.95em; }
+.rcpt__barcode { margin: 3mm auto 0; text-align: center; }
+
+/* A4 invoice specifics */
+.size-a4 .inv-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 10mm;
+}
+.size-a4 .inv-title { font-size: 24px; font-weight: 700; letter-spacing: 0.04em; }
+.size-a4 .inv-parties { display: flex; justify-content: space-between; gap: 10mm; margin-bottom: 8mm; font-size: 12px; }
+.size-a4 table.inv-items { width: 100%; border-collapse: collapse; margin-bottom: 8mm; }
+.size-a4 table.inv-items th {
+  background: #f1f1f1;
+  border: 1px solid #999;
+  padding: 3mm;
+  text-align: left;
+  font-size: 11px;
+  text-transform: uppercase;
+}
+.size-a4 table.inv-items td { border: 1px solid #ccc; padding: 3mm; font-size: 12px; }
+.size-a4 table.inv-items .num { text-align: right; font-variant-numeric: tabular-nums; }
+.size-a4 .inv-summary { width: 70mm; margin-left: auto; font-size: 12px; }
+.size-a4 .inv-summary .rcpt__row { padding: 1.5mm 0; }
+.size-a4 .inv-summary .rcpt__grand { font-size: 15px; }
+.size-a4 .inv-foot { margin-top: 14mm; font-size: 11px; color: #444 !important; text-align: center; }
+
+/* ==========================================================================
+   Actual printing
+   ========================================================================== */
+@media print {
+  /* Fallback page margin for the legacy .size-* receipts. The barcode and
+     invoice generators emit their own scoped @page at the configured physical
+     size, which overrides this. */
+  @page { margin: 0; }
+
+  html, body {
+    background: #fff !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Isolate the print document by removing every other body child from the
+     layout entirely. `display: none` (not `visibility: hidden`) so nothing
+     reserves space or interferes with page fragmentation. */
+  body > *:not(#print-root) { display: none !important; }
+
+  /* #print-root MUST stay in normal flow. `position: absolute` here breaks the
+     browser's multi-page fragmentation - it caused two barcodes to land on one
+     physical page and produced blank / missing pages - and `left: 0` anchored
+     content to one side. Keep it static, full flow, no forced width. */
+  #print-root {
+    display: block !important;
+    position: static !important;
+    inset: auto !important;
+    left: auto !important; top: auto !important;
+    width: auto !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    visibility: visible !important;
+  }
+  #print-root * { visibility: visible !important; }
+
+  /* Centre the physical document within the sheet on both axes. A hardware
+     180deg printer rotation keeps centred content centred. */
+  #print-root .receipt-preview,
+  #print-root .bc-run {
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
+
+  .receipt-preview { box-shadow: none !important; margin: 0 auto !important; }
+  .receipt-preview.size-58 { width: 58mm; }
+  .receipt-preview.size-80 { width: 80mm; }
+  .receipt-preview.size-a4 { width: auto; min-height: auto; padding: 14mm; }
+
+  /* Avoid awkward page breaks */
+  .rcpt table tr,
+  .size-a4 table.inv-items tr { page-break-inside: avoid; break-inside: avoid; }
+  .rcpt__grand, .rcpt__thanks { page-break-inside: avoid; break-inside: avoid; }
+
+  /* Kill trailing blank page */
+  #print-root > *:last-child { margin-bottom: 0 !important; }
+
+  .no-print { display: none !important; }
+}
+
+/* Utility: only show when printing */
+.print-only { display: none; }
+@media print { .print-only { display: block; } }

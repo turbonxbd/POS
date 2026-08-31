@@ -1,0 +1,173 @@
+/* ==========================================================================
+   portal.css - the Afia Cosmetics portal landing page
+   ========================================================================== */
+
+.portal {
+  min-height: 100dvh;
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: var(--sp-6) var(--sp-4);
+  background:
+    radial-gradient(1200px 600px at 50% -10%, color-mix(in srgb, var(--brand-500) 16%, transparent), transparent 70%),
+    var(--bg-body);
+}
+
+.portal__inner {
+  width: 100%;
+  max-width: 560px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-6);
+}
+
+.portal__brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-3);
+  text-align: center;
+}
+.portal__brand img { height: 46px; width: auto; }
+.portal__brand .mark {
+  width: 64px; height: 64px; border-radius: var(--radius-xl);
+  background: linear-gradient(135deg, var(--brand-500), #8b5cf6);
+  display: grid; place-content: center;
+}
+.portal__brand h1 {
+  font-size: var(--fs-2xl);
+  letter-spacing: -0.02em;
+  color: var(--text-strong);
+}
+.portal__brand p {
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.portal__card {
+  width: 100%;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  padding: var(--sp-7);
+}
+
+/* ---- merchant sign-in ---- */
+.portal-login { display: flex; flex-direction: column; gap: var(--sp-3); text-align: center; }
+.portal-login h2 { font-size: var(--fs-xl); }
+.portal-login > p.muted { font-size: var(--fs-sm); color: var(--text-muted); margin: 0; }
+.portal-login .field { text-align: left; }
+.portal-login__icon {
+  width: 44px; height: 44px; border-radius: var(--radius-md);
+  background: var(--accent-soft); color: var(--accent-text);
+  display: grid; place-content: center; margin: 0 auto var(--sp-1);
+}
+.portal-login__err { color: var(--danger-fg); font-size: var(--fs-sm); min-height: 1.2em; }
+.portal-login__foot { font-size: var(--fs-sm); margin: var(--sp-1) 0 0; }
+.portal-login .btn--block { margin-top: var(--sp-1); }
+
+/* ---- code gate ---- */
+.portal-gate { display: flex; flex-direction: column; gap: var(--sp-4); text-align: center; }
+.portal-gate h2 { font-size: var(--fs-xl); }
+.portal-gate p { font-size: var(--fs-sm); color: var(--text-muted); }
+.portal-gate__input {
+  width: 100%;
+  height: 56px;
+  text-align: center;
+  font-size: var(--fs-2xl);
+  font-weight: 700;
+  letter-spacing: 0.35em;
+  text-transform: uppercase;
+  font-family: var(--font-mono);
+  padding-left: 0.35em;
+}
+.portal-gate__error {
+  color: var(--danger-fg);
+  font-size: var(--fs-sm);
+  min-height: 1.2em;
+}
+
+/* ---- panel picker ---- */
+.portal-panels { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-4); }
+@media (max-width: 560px) { .portal-panels { grid-template-columns: 1fr; } }
+
+.panel-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-5);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+  text-align: left;
+  transition: transform var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast);
+  color: inherit;
+}
+.panel-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--accent);
+}
+.panel-card__icon {
+  width: 46px; height: 46px;
+  border-radius: var(--radius-md);
+  display: grid; place-content: center;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+.panel-card__icon svg { width: 22px; height: 22px; }
+.panel-card--pos .panel-card__icon { background: var(--success-bg); color: var(--success-fg); }
+.panel-card h3 { font-size: var(--fs-lg); }
+.panel-card p { font-size: var(--fs-sm); color: var(--text-muted); flex: 1; }
+.panel-card__go {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: var(--fs-sm); font-weight: 600; color: var(--accent-text);
+}
+
+.portal-session {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface-2);
+  font-size: var(--fs-sm);
+  margin-bottom: var(--sp-4);
+}
+.portal-session .grow { flex: 1; min-width: 0; }
+.portal-session strong { color: var(--text-strong); }
+
+.portal__foot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-4);
+  flex-wrap: wrap;
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+}
+.portal__foot button {
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.portal__foot button:hover { color: var(--text-primary); }
+
+.portal-accounts {
+  margin-top: var(--sp-3);
+  border-top: 1px dashed var(--border);
+  padding-top: var(--sp-3);
+}
+.portal-accounts summary { cursor: pointer; font-size: var(--fs-sm); font-weight: 600; color: var(--text-secondary); }
+.portal-accounts table { width: 100%; margin-top: var(--sp-2); font-size: var(--fs-xs); }
+.portal-accounts td { padding: 3px 6px; color: var(--text-secondary); }
+.portal-accounts td:first-child { color: var(--text-primary); font-weight: 500; }

@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>POS TXbd · Cashier</title>
+  <link rel="icon" href="assets/logos/favicon.svg">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#5145d8">
+  <link rel="stylesheet" href="css/reset.css">
+  <link rel="stylesheet" href="css/tokens.css">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/layout.css">
+  <link rel="stylesheet" href="css/cashier.css">
+  <link rel="stylesheet" href="css/responsive.css">
+  <link rel="stylesheet" href="css/print.css">
+</head>
+<body>
+  <div id="app-progress"></div>
+  <div id="pos-root">
+    <div class="gate"><div class="loading-block"><span class="spinner"></span><span>Opening terminal…</span></div></div>
+  </div>
+  <div id="print-root" aria-hidden="true"></div>
+  <script type="module" src="js/app-cashier.js"></script>
+</body>
+</html>

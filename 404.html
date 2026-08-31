@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>POS TXbd</title>
+<meta name="robots" content="noindex">
+<script>
+  // Static hosts (GitHub Pages, Hostinger, Netlify, …) serve this for any
+  // unmatched path. The app uses hash routing, so send every stray path back to
+  // the app root. On a GitHub project page the first path segment is the repo
+  // name and must be kept; on a domain root (own hosting) there is none.
+  (function () {
+    var parts = location.pathname.split('/').filter(Boolean);
+    var isProjectPage = location.hostname.endsWith('.github.io') && parts.length > 0
+      && !/\.html?$/.test(parts[0]);
+    var root = location.origin + '/' + (isProjectPage ? parts[0] + '/' : '');
+    location.replace(root);
+  })();
+</script>
+<meta http-equiv="refresh" content="0; url=./">
+</head>
+<body>Redirecting to <a href="./">POS TXbd</a>…</body>
+</html>

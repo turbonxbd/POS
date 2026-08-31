@@ -1,0 +1,13 @@
+# real credentials - never commit
+config/config.php
+
+# runtime data
+storage/backups/*
+storage/logs/*
+!storage/**/.gitkeep
+
+# build output
+dist/
+vendor/
+*.sqlite
+*.log
