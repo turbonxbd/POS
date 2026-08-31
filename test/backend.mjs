@@ -178,11 +178,22 @@ await step('settings', async () => {
 
 // ---- reports ----
 const badReports = [];
-for (const rt of ['sales', 'profit', 'purchases', 'inventory', 'stock-movement', 'customers', 'suppliers', 'expenses', 'cashier', 'payments', 'tax', 'product-performance', 'category-performance', 'daily-closing']) {
+for (const rt of ['sales', 'profit', 'purchases', 'inventory', 'stock-movement', 'customers', 'suppliers', 'expenses', 'cashier', 'payments', 'tax', 'product-performance', 'category-performance', 'daily-closing', 'dead-stock']) {
   try { if (!Array.isArray((await http.get('/reports/' + rt, { params: { branchId: B, preset: 'this_year' } })).rows)) badReports.push(rt); }
   catch (e) { badReports.push(rt + '(' + e.message + ')'); }
 }
-T('all 14 reports return rows[]', badReports.length === 0, badReports.join(', '));
+T('all 15 reports return rows[]', badReports.length === 0, badReports.join(', '));
+
+await step('dead-stock report', async () => {
+  const dp = await http.post('/products', { branchId: B, name: 'QA Dead Item', sellingPrice: 8000, costPrice: 5000, unit: 'pcs', openingStock: 6 });
+  const rep = await http.get('/reports/dead-stock', { params: { branchId: B, days: 90 } });
+  const row = rep.rows.find((r) => r.productId === dp.id);
+  T('a never-sold in-stock product is flagged dead', row && row.status === 'dead', JSON.stringify(row));
+  T('dead-stock row carries on-hand + value', row.quantity === 6 && row.stockValue === 30000, String(row?.stockValue));
+  T('dead-stock totals expose deadValue / deadCount', typeof rep.totals.deadValue === 'number' && rep.totals.deadCount >= 1);
+  const slow = await http.get('/reports/dead-stock', { params: { branchId: B, days: 90, stockStatus: 'slow' } });
+  T('stockStatus filter narrows the rows', slow.rows.every((r) => r.status === 'slow'));
+});
 T('dashboard aggregates from persisted sales', (await http.get('/dashboard', { params: { branchId: B, preset: 'this_year' } })).kpis.totalSales > 0);
 T('audit log append-only & populated', (await http.get('/audit-logs', { params: { pageSize: 5 } })).data.length > 0);
 T('backup export contains data', (await http.get('/backup/export')).collections.products.length > 0);

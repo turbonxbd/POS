@@ -21,7 +21,7 @@ import store from '../../core/store.js';
 
 const MONEY_RE = /total|amount|value|revenue|cost|profit|tax|discount|paid|due|base|inflow|outflow|refund|net|spent|outstanding|gross|cash|epayment|price|saletotal|change/i;
 const NUM_RE = /qty|orders|units|count|items|transactions|loyalty|balance|margin|rate/i;
-const DATE_KEYS = new Set(['date', 'lastPurchase', 'lastpurchase']);
+const DATE_KEYS = new Set(['date', 'lastPurchase', 'lastpurchase', 'lastsold']);
 const HIDDEN_KEYS = new Set(['id', 'saleId', 'customerId', 'productId', 'purchaseId', 'methodKey', 'direction']);
 
 const PRESETS = [
@@ -272,6 +272,10 @@ function renderFilters(meta, filters, data) {
       parts.push(sel('supplier', filters.supplier, [['', 'All suppliers'], ...(data.suppliers || []).map((s) => [s, s])]));
     } else if (f === 'category') {
       parts.push(sel('category', filters.category, [['all', 'All categories'], ...(data.expenseCategories || []).map((c) => [c, c])]));
+    } else if (f === 'days') {
+      parts.push(sel('days', filters.days || '90', [['30', 'Idle 30+ days'], ['60', 'Idle 60+ days'], ['90', 'Idle 90+ days'], ['180', 'Idle 180+ days']]));
+    } else if (f === 'stockStatus') {
+      parts.push(sel('stockStatus', filters.stockStatus, [['all', 'All'], ['dead', 'Dead'], ['slow', 'Slow-moving'], ['ok', 'Still selling']]));
     }
   }
   return parts.join('');

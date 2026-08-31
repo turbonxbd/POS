@@ -167,6 +167,18 @@ final class Analytics
                 $rows = Reports::inventoryValuationRows($ctx, $s['branchId']);
                 return Response::json(['rows' => $rows, 'totals' => Reports::aggregate($rows, ['quantity', 'stockValue', 'potentialSales', 'potentialProfit'])]);
 
+            case 'dead-stock':
+                $days = max(1, (int) ($q['days'] ?? 90));
+                $rows = Reports::deadStockRows($ctx, $s['branchId'], $days);
+                if (!empty($q['stockStatus']) && $q['stockStatus'] !== 'all') {
+                    $rows = array_values(array_filter($rows, static fn ($r) => $r['status'] === $q['stockStatus']));
+                }
+                $totals = Reports::aggregate($rows, ['quantity', 'stockValue', 'soldLast30', 'soldLast90']);
+                $totals['deadValue'] = array_sum(array_map(static fn ($r) => $r['status'] === 'dead' ? $r['stockValue'] : 0, $rows));
+                $totals['deadCount'] = count(array_filter($rows, static fn ($r) => $r['status'] === 'dead'));
+                $totals['slowCount'] = count(array_filter($rows, static fn ($r) => $r['status'] === 'slow'));
+                return Response::json(['range' => $s['range'], 'rows' => $rows, 'totals' => $totals, 'days' => $days]);
+
             case 'expenses':
                 $rows = Reports::expenseRows(Reports::expenses($ctx, $s));
                 if (!empty($q['category']) && $q['category'] !== 'all') {

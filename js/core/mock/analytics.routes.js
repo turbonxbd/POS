@@ -190,6 +190,16 @@ export default function register(router) {
         const rows = lib.inventoryValuationRows(s.branchId);
         return ok({ rows, totals: lib.aggregate(rows, ['quantity', 'stockValue', 'potentialSales', 'potentialProfit']) });
       }
+      case 'dead-stock': {
+        const days = Math.max(1, Number(query.days) || 90);
+        let rows = lib.deadStockRows(s.branchId, days);
+        if (query.stockStatus && query.stockStatus !== 'all') rows = rows.filter((r) => r.status === query.stockStatus);
+        const totals = lib.aggregate(rows, ['quantity', 'stockValue', 'soldLast30', 'soldLast90']);
+        totals.deadValue = rows.filter((r) => r.status === 'dead').reduce((x, r) => x + r.stockValue, 0);
+        totals.deadCount = rows.filter((r) => r.status === 'dead').length;
+        totals.slowCount = rows.filter((r) => r.status === 'slow').length;
+        return ok({ range: s.range, rows, totals, days });
+      }
       case 'expenses': {
         const rows = lib.expenseRows(lib.selectExpenses(s)).filter((r) => !query.category || query.category === 'all' || r.category === query.category);
         return ok({ range: s.range, rows, totals: lib.aggregate(rows, ['amount']) });

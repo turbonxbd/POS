@@ -417,6 +417,64 @@ export function inventoryValuationRows(branchId) {
   return rows.sort((a, b) => b.stockValue - a.stockValue);
 }
 
+/**
+ * Dead-stock / slow-mover / ageing report. For every in-stock product (or
+ * variant) it looks up the last sale and the trailing 30/90-day sale volume
+ * from the immutable movement ledger. `days` is the idle threshold that marks a
+ * line "dead"; a line that has sold since the threshold but not in the last 30
+ * days is "slow".
+ */
+export function deadStockRows(branchId, days = 90) {
+  const nowMs = Date.now();
+  const cutoff = nowMs - days * 86400000;
+  const win30 = nowMs - 30 * 86400000;
+  const win90 = nowMs - 90 * 86400000;
+
+  const sale = new Map(); // "prod:variant" -> { last, q30, q90 }
+  for (const t of tdb('inventory_transactions').all()) {
+    if (t.type !== 'sale') continue;
+    if (branchId && t.branchId !== branchId) continue;
+    const key = `${t.productId}:${t.variantId || 'base'}`;
+    const at = new Date(t.at).getTime();
+    const units = Math.abs(Number(t.qtyDelta) || 0);
+    const acc = sale.get(key) || { last: 0, q30: 0, q90: 0 };
+    if (at > acc.last) acc.last = at;
+    if (at >= win30) acc.q30 += units;
+    if (at >= win90) acc.q90 += units;
+    sale.set(key, acc);
+  }
+
+  const rows = [];
+  for (const s of tdb('stock').all()) {
+    if (branchId && s.branchId !== branchId) continue;
+    if (s.quantity <= 0) continue;
+    const p = tdb('products').get(s.productId);
+    if (!p || p.archivedAt || p.trackInventory === false) continue;
+    const vName = s.variantId ? p.variants?.find((v) => v.id === s.variantId)?.name || '' : '';
+    const key = `${s.productId}:${s.variantId || 'base'}`;
+    const agg = sale.get(key);
+    const lastMs = agg?.last || 0;
+    const sinceMs = lastMs || new Date(s.lastMovementAt || p.createdAt || nowMs).getTime();
+    const stockValue = money.mul(s.avgCost, s.quantity);
+    const status = !lastMs || lastMs < cutoff ? 'dead' : (!agg.q30 ? 'slow' : 'ok');
+    rows.push({
+      productId: p.id,
+      product: p.name + (vName ? ` (${vName})` : ''),
+      sku: s.variantId ? p.variants?.find((v) => v.id === s.variantId)?.sku || p.sku : p.sku,
+      category: p.categoryId ? tdb('categories').get(p.categoryId)?.name || '—' : '—',
+      quantity: s.quantity,
+      avgCost: s.avgCost,
+      stockValue,
+      lastSold: lastMs ? new Date(lastMs).toISOString() : null,
+      daysIdle: Math.max(0, Math.floor((nowMs - sinceMs) / 86400000)),
+      soldLast30: agg?.q30 || 0,
+      soldLast90: agg?.q90 || 0,
+      status,
+    });
+  }
+  return rows.sort((a, b) => b.stockValue - a.stockValue);
+}
+
 export function expenseRows(expenses) {
   return expenses.map((e) => ({
     reference: e.reference,

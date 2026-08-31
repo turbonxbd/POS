@@ -246,6 +246,78 @@ final class Reports
         return $rows;
     }
 
+    /** Dead-stock / slow-mover / ageing. `days` is the idle threshold marking a line "dead". */
+    public static function deadStockRows(Context $ctx, ?string $branchId, int $days = 90): array
+    {
+        $nowMs = (int) (microtime(true) * 1000);
+        $cutoff = $nowMs - $days * 86400000;
+        $win30 = $nowMs - 30 * 86400000;
+        $win90 = $nowMs - 90 * 86400000;
+
+        $where = ['type = :t'];
+        $params = [':t' => 'sale'];
+        if ($branchId) {
+            $where[] = 'branch_id = :b';
+            $params[':b'] = $branchId;
+        }
+        $sale = [];
+        foreach ($ctx->repo()->allDocs('inventory_transactions', implode(' AND ', $where), $params) as $t) {
+            $key = $t['productId'] . ':' . ($t['variantId'] ?? 'base');
+            $at = (int) (strtotime((string) $t['at']) * 1000);
+            $units = abs((int) ($t['qtyDelta'] ?? 0));
+            $acc = $sale[$key] ?? ['last' => 0, 'q30' => 0, 'q90' => 0];
+            if ($at > $acc['last']) {
+                $acc['last'] = $at;
+            }
+            if ($at >= $win30) {
+                $acc['q30'] += $units;
+            }
+            if ($at >= $win90) {
+                $acc['q90'] += $units;
+            }
+            $sale[$key] = $acc;
+        }
+
+        $rows = [];
+        $stock = $ctx->repo()->allDocs('stock', $branchId ? 'branch_id = :b AND quantity > 0' : 'quantity > 0', $branchId ? [':b' => $branchId] : []);
+        foreach ($stock as $st) {
+            $p = $ctx->repo()->doc('products', $st['productId']);
+            if (!$p || !empty($p['archivedAt']) || ($p['trackInventory'] ?? true) === false) {
+                continue;
+            }
+            $vName = '';
+            $vSku = null;
+            foreach ($p['variants'] ?? [] as $v) {
+                if ($v['id'] === ($st['variantId'] ?? null)) {
+                    $vName = $v['name'] ?? '';
+                    $vSku = $v['sku'] ?? null;
+                }
+            }
+            $key = $st['productId'] . ':' . ($st['variantId'] ?? 'base');
+            $agg = $sale[$key] ?? null;
+            $lastMs = $agg['last'] ?? 0;
+            $sinceMs = $lastMs ?: (int) (strtotime((string) ($st['lastMovementAt'] ?? $p['createdAt'] ?? 'now')) * 1000);
+            $stockValue = Money::mul((int) $st['avgCost'], (int) $st['quantity']);
+            $status = (!$lastMs || $lastMs < $cutoff) ? 'dead' : (empty($agg['q30']) ? 'slow' : 'ok');
+            $rows[] = [
+                'productId' => $p['id'],
+                'product' => $p['name'] . ($vName ? " ({$vName})" : ''),
+                'sku' => $vSku ?: ($p['sku'] ?? null),
+                'category' => !empty($p['categoryId']) ? ($ctx->repo()->doc('categories', $p['categoryId'])['name'] ?? '-') : '-',
+                'quantity' => (int) $st['quantity'],
+                'avgCost' => (int) $st['avgCost'],
+                'stockValue' => $stockValue,
+                'lastSold' => $lastMs ? gmdate('c', (int) ($lastMs / 1000)) : null,
+                'daysIdle' => max(0, (int) floor(($nowMs - $sinceMs) / 86400000)),
+                'soldLast30' => $agg['q30'] ?? 0,
+                'soldLast90' => $agg['q90'] ?? 0,
+                'status' => $status,
+            ];
+        }
+        usort($rows, static fn ($a, $b) => $b['stockValue'] <=> $a['stockValue']);
+        return $rows;
+    }
+
     public static function expenseRows(array $expenses): array
     {
         return array_map(static fn ($e) => [

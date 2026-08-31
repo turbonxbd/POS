@@ -73,6 +73,33 @@ test('reports/profit + daily-closing produce day rows', function () {
     expect_eq($dc['body']['rows'][0]['epayment'], 120000);
 });
 
+test('reports/dead-stock: never-sold in-stock product is flagged dead; stockStatus filters', function () {
+    $kit = new TestKit();
+    $s = $kit->loginAs();
+    twoSales($kit, $s); // A + B have sales today
+    $dead = mkProduct($kit, $s, 'Sits On Shelf', 'DEAD-1', '2000000003035', 5000, 9000, 8);
+
+    $r = authed($kit, $s, 'GET', '/api/reports/dead-stock', ['query' => ['branchId' => $kit->branchId, 'days' => 90]]);
+    expect_eq($r['status'], 200);
+    $row = null;
+    foreach ($r['body']['rows'] as $x) {
+        if ($x['productId'] === $dead['id']) {
+            $row = $x;
+        }
+    }
+    expect($row !== null, 'dead product listed');
+    expect_eq($row['status'], 'dead');
+    expect_eq($row['quantity'], 8);
+    expect_eq($row['stockValue'], 40000);
+    expect($r['body']['totals']['deadCount'] >= 1, 'deadCount counted');
+    expect(is_numeric($r['body']['totals']['deadValue']), 'deadValue present');
+
+    $slow = authed($kit, $s, 'GET', '/api/reports/dead-stock', ['query' => ['branchId' => $kit->branchId, 'stockStatus' => 'slow']]);
+    foreach ($slow['body']['rows'] as $x) {
+        expect_eq($x['status'], 'slow');
+    }
+});
+
 test('reports: unknown type -> 422', function () {
     $kit = new TestKit();
     $s = $kit->loginAs();
