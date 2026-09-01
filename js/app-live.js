@@ -74,6 +74,7 @@ const root = document.getElementById('app-root');
 
 (async () => {
   await boot({ seedIfEmpty: true });
+  import('./components/install-prompt.js').then((m) => m.startInstallPrompt()).catch(() => {});
 
   try {
     const s = await platformService.publicSettings();

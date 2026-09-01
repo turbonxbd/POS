@@ -30,6 +30,7 @@ document.getElementById('portal-version').textContent = `POS TXbd · v${config.a
 (async () => {
   await boot();
   mountLangSwitch(document.querySelector('.portal__foot'));
+  import('./components/install-prompt.js').then((m) => m.startInstallPrompt()).catch(() => {});
 
   let user = null;
   try {

@@ -28,6 +28,7 @@ document.getElementById('year').textContent = new Date().getFullYear();
 
 (async () => {
   await boot();
+  import('./components/install-prompt.js').then((m) => m.startInstallPrompt()).catch(() => {});
   const corner = document.createElement('div');
   corner.style.cssText = 'position:fixed;top:16px;right:16px;z-index:50';
   document.body.appendChild(corner);

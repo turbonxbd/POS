@@ -93,7 +93,7 @@ export const config = Object.freeze({
   },
 
   features: {
-    pwa: String(injected.APP_ENABLE_PWA ?? 'false') === 'true', // off while stabilising; flip to 'true' + bump SW VERSION to re-enable
+    pwa: String(injected.APP_ENABLE_PWA ?? 'true') === 'true', // installable app; the SW is shell-only and never caches /api/*. Bump service-worker.js VERSION on each deploy.
     cameraScanner: String(injected.APP_ENABLE_CAMERA_SCANNER ?? 'true') === 'true',
     multiBranch: true,
     loyaltyPoints: true,

@@ -42,7 +42,9 @@ Demo sign-ins: staff `admin@txdemo.shop` / `demo1234` (also `manager@`,
 | **Multi-branch** | Stock, sales, purchases, registers and staff assignments are all branch-aware. Top-bar branch switcher. |
 | **Real-time sync** | Open tables, dashboards and the POS catalogue refresh themselves when the underlying data changes — no manual reload. Same browser: instant, via the `storage` event. Other devices / branches (rest mode): a ~3.5s poll of `GET /sync/changes?since=<cursor>` returns only the merchant's changed table names (never row data) so the UI re-fetches. Shared PHP hosting can't hold WebSocket/SSE connections, so the poll is the transport; the signal is the real database, not `localStorage`. |
 | **Responsive** | One interface across mobile / tablet / laptop / desktop — sidebar collapses to a drawer, the POS cart becomes a bottom sheet, tables scroll inside their own container, modals become sheets. No feature is hidden. |
-| **Offline / PWA** | A service worker + a sync queue that holds sales made offline and replays them (idempotently) on reconnect — never overwriting newer data. The cashier topbar shows a live indicator (offline / N queued / syncing) with a panel to retry or dismiss stuck items. Opt-in via `APP_ENABLE_PWA`. |
+| **Installable app (PWA)** | Installs as **POS TXbd** on Windows / macOS / Android / iOS — standalone window, own icon, splash where supported. The Portal is the launch target: sign in once, then open Merchant Admin or Cashier with the session intact; Super Admin stays on its own URL and is never linked or cached from the app. A quiet "Install POS TXbd" pill shows only when the browser offers it and never again after install or dismissal. On `APP_ENABLE_PWA` (default on). |
+| **Service worker** | Caches only the static shell (HTML / CSS / JS / icons) — stale-while-revalidate for assets, network-first for navigations. It never touches `/api/*`, `/sync/*` or any data call, so it can't serve or overwrite stale merchant data. A new deploy (bump `VERSION` in `service-worker.js`) surfaces an in-app "Update available — reload now" toast; nothing reloads silently and no merchant data is cleared. |
+| **Offline** | A sync queue holds sales made offline and replays them (idempotently) on reconnect — never overwriting newer data. The cashier topbar shows a live indicator (offline / N queued / syncing) with a panel to retry or dismiss stuck items. When the device drops the connection a full-screen "No internet" block prevents unsafe server actions until it verifies the connection is back. |
 | **Data safety** | Merchant **Settings → Backup** exports/imports a full JSON snapshot. In the browser-only build `js/core/backup-auto.js` keeps the newest 5 IndexedDB snapshots (auto, + on tab close); on the PHP backend a cron runs `bin/backup.php` and **Super Admin → Backups** lists / downloads / restores them. |
 | **Design system** | CSS design tokens, light & dark themes, accessible modals/menus, print stylesheets. |
 
@@ -86,7 +88,8 @@ The demo dataset seeds automatically on first load. Reset it any time from
    manifest.webmanifest · service-worker.js · serve.mjs · .nojekyll · 404.html
 ├── css/      reset · tokens · base · layout · components · admin · cashier
 │             portal · print · responsive
-├── assets/   logos/ (svg) · fonts/ (Hind Siliguri woff2) · icons/ · img/
+├── assets/   logos/ (svg + PWA icon PNGs) · fonts/ (Hind Siliguri woff2) · icons/ · img/
+├── scripts/  build-icons.mjs (regenerates the PWA PNG icons, no deps)
 ├── data/     README of the persisted JSON shapes
 ├── test/     Node + jsdom smoke tests (run.mjs)
 └── js/

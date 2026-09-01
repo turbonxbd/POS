@@ -140,8 +140,43 @@ function registerServiceWorker() {
   }
 
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js').catch((err) => {
-      console.warn('[boot] service worker registration failed', err);
+    navigator.serviceWorker.register('service-worker.js')
+      .then((reg) => watchForUpdate(reg))
+      .catch((err) => console.warn('[boot] service worker registration failed', err));
+  });
+
+  // When the fresh worker takes control, reload once so every module matches it.
+  let reloading = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (reloading) return;
+    reloading = true;
+    location.reload();
+  });
+}
+
+/**
+ * Tell the user when a new build is waiting — never swap it in silently (a
+ * mid-sale reload would be hostile, and the SW only touches static shell files
+ * so merchant data is never involved).
+ */
+function watchForUpdate(reg) {
+  const offer = (worker) => {
+    import('../components/toast.js').then(({ toast }) => {
+      toast.info('A new version of POS TXbd is ready.', {
+        duration: 0,
+        title: 'Update available',
+        action: { label: 'Reload now', onClick: () => worker.postMessage('skipWaiting') },
+      });
+    });
+  };
+
+  if (reg.waiting && navigator.serviceWorker.controller) offer(reg.waiting);
+
+  reg.addEventListener('updatefound', () => {
+    const fresh = reg.installing;
+    if (!fresh) return;
+    fresh.addEventListener('statechange', () => {
+      if (fresh.state === 'installed' && navigator.serviceWorker.controller) offer(fresh);
     });
   });
 }
