@@ -17,6 +17,10 @@ import { icon } from './components/icons.js';
 import { escapeHtml } from './utils/dom.js';
 import { initials } from './utils/format.js';
 import { mountLangSwitch } from './components/lang-switch.js';
+import { openModal } from './components/modal.js';
+import { toast } from './components/toast.js';
+import { authService } from './services/auth-service.js';
+import { platformService } from './services/platform-service.js';
 
 const card = document.getElementById('portal-card');
 
@@ -59,11 +63,12 @@ function renderLogin(message) {
         <input class="input" type="password" name="password" autocomplete="current-password" required></label>
       <div class="portal-login__err" id="login-err" role="alert"></div>
       <button class="btn btn--primary btn--lg btn--block" type="submit">Sign in</button>
-      <p class="portal-login__foot"><a href="index.html">Don't have an account? See our plans &rarr;</a></p>
+      <p class="portal-login__foot"><a href="#" id="forgot-link">Forgot your password?</a> · <a href="index.html">See our plans &rarr;</a></p>
     </form>`;
 
   const form = document.getElementById('login-form');
   const err = document.getElementById('login-err');
+  document.getElementById('forgot-link').addEventListener('click', (e) => { e.preventDefault(); openForgot(emailEl.value.trim()); });
   const emailEl = form.querySelector('[name=email]');
   const pwEl = form.querySelector('[name=password]');
   form.addEventListener('submit', async (e) => {
@@ -86,6 +91,32 @@ function renderLogin(message) {
       btn.disabled = false;
       btn.textContent = 'Sign in';
     }
+  });
+}
+
+/* ------------------------------------------------------------- forgot */
+async function openForgot(prefill) {
+  let wa = null;
+  try { wa = (await platformService.publicSettings())?.contact?.whatsapp || null; } catch { /* offline */ }
+  const m = openModal({
+    title: 'Reset your password',
+    size: 'sm',
+    body: `<p class="text-sm muted">Enter the email on your account. We'll send the request to the POS TXbd team, who will verify it and give you a temporary password.</p>
+      <label class="field"><span class="label">Account email</span>
+        <input class="input js-fp-email" type="email" value="${escapeHtml(prefill || '')}" autocomplete="username" autofocus></label>`,
+    footer: `<button class="btn btn--ghost js-modal-close">Cancel</button><button class="btn btn--primary js-fp-send">Send request</button>`,
+  });
+  m.$('.js-fp-send').addEventListener('click', async () => {
+    const email = m.$('.js-fp-email').value.trim();
+    if (!email) { toast.warning('Enter your account email.'); return; }
+    m.setBusy(true);
+    try { await authService.forgotPassword(email); } catch { /* never reveal */ }
+    const waLink = wa ? `https://wa.me/${wa}?text=${encodeURIComponent(`Hi, I'm locked out of my POS TXbd account (${email}) and need a password reset.`)}` : null;
+    m.setBody(`<div class="alert alert--success"><div class="alert__body">
+      Request received. The team will verify it and contact you with a temporary password.
+      ${waLink ? `<br><a href="${waLink}" target="_blank" rel="noopener">Message support on WhatsApp &rarr;</a>` : ''}
+    </div></div>`);
+    m.setFooter('<button class="btn btn--primary js-modal-close">Done</button>');
   });
 }
 

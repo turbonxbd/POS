@@ -61,6 +61,23 @@ const card = document.getElementById('portal-card');
 T('portal shows a merchant sign-in form (no access code)', !!card.querySelector('#login-form') && !card.querySelector('#gate-form'));
 T('sign-in form has email + password', !!card.querySelector('#login-form [name=email]') && !!card.querySelector('#login-form [name=password]'));
 
+// forgot-password: link opens a modal that posts /auth/forgot and confirms
+T('sign-in form has a "Forgot password" link', !!card.querySelector('#forgot-link'));
+{
+  card.querySelector('#login-form [name=email]').value = 'admin@txdemo.shop';
+  card.querySelector('#forgot-link').click();
+  for (let i = 0; i < 20 && !document.querySelector('.modal .js-fp-send'); i++) await sleep(50);
+  const send = document.querySelector('.modal .js-fp-send');
+  T('forgot-password modal opens with the email prefilled', !!send && document.querySelector('.modal .js-fp-email')?.value === 'admin@txdemo.shop');
+  send?.click();
+  for (let i = 0; i < 20 && !/request received/i.test(document.querySelector('.modal')?.textContent || ''); i++) await sleep(50);
+  T('forgot-password shows a "request received" confirmation', /request received/i.test(document.querySelector('.modal')?.textContent || ''));
+  document.querySelector('.modal .js-modal-close')?.click();
+  await sleep(50);
+  const { db } = await import(R + 'js/core/db.js');
+  T('forgot-password raised a Super Admin notification', db.collection('platform_notifications').all().some((n) => n.type === 'password_reset'));
+}
+
 await doLogin('admin@txdemo.shop', 'wrong-pw');
 T('wrong password shows an error, stays on the form', !!card.querySelector('#login-form') && card.querySelector('#login-err').textContent.length > 0);
 

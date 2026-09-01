@@ -33,6 +33,7 @@ export default async function merchantDetailPage(ctx, mount) {
       ? { label: 'Suspend', variant: 'danger', icon: 'alert-triangle', onClick: () => setStatus('suspended') }
       : { label: 'Reactivate', variant: needsApproval ? 'ghost' : 'primary', icon: 'check', onClick: () => setStatus('active') },
     { label: 'Message merchant', variant: 'ghost', icon: 'bell', onClick: sendMessage },
+    { label: 'Reset owner password', variant: 'ghost', icon: 'shield', onClick: resetOwner },
     { label: 'Record payment', variant: 'ghost', icon: 'banknote', onClick: recordPayment },
     { label: 'Manage subscription', variant: 'ghost', icon: 'rotate-ccw', onClick: manageSub },
   ]);
@@ -201,6 +202,28 @@ export default async function merchantDetailPage(ctx, mount) {
     await platformService.updateMerchant(m.id, { status });
     toast.success(status === 'suspended' ? 'Merchant suspended' : 'Merchant reactivated');
     reload();
+  }
+
+  async function resetOwner() {
+    if (!(await confirmDialog({
+      title: `Reset the owner password for ${d.business?.name || m.name}?`,
+      message: 'A new temporary password is generated and their current one stops working immediately. Share it with the merchant over a trusted channel; they should change it after signing in.',
+      confirmLabel: 'Generate temporary password',
+      danger: true,
+    }))) return;
+    try {
+      const res = await platformService.resetMerchantOwner(m.id);
+      const dlg = openModal({
+        title: 'Temporary password',
+        size: 'sm',
+        body: `<p class="text-sm">For <strong>${escapeHtml(res.name)}</strong> · <span class="mono">${escapeHtml(res.email)}</span></p>
+          <div class="sa-kv"><span>Temporary password</span><b class="mono" style="user-select:all">${escapeHtml(res.tempPassword)}</b></div>
+          <p class="muted text-xs" style="margin-top:8px">Shown once. Send it to the merchant now; they sign in at the portal and change it from their profile.</p>`,
+        footer: '<button class="btn btn--primary js-modal-close">Done</button>',
+      });
+      void dlg;
+      reload();
+    } catch (err) { toast.error(err?.data?.message || 'Could not reset the password'); }
   }
 
   function sendMessage() {

@@ -12,7 +12,7 @@ import { setActor, getActor } from './context.js';
 import { hashPassword, verifyPassword, issueToken } from '../../utils/crypto.js';
 import { now } from '../../utils/date.js';
 import config from '../../config.js';
-import { liveStatus, dueAmount, isBlocked, graceDays } from './platform-helpers.js';
+import { liveStatus, dueAmount, isBlocked, graceDays, notifyPlatform } from './platform-helpers.js';
 
 function hydrateUser(user) {
   const role = db.collection('roles').get(user.roleId) || null;
@@ -150,6 +150,37 @@ export default function register(router) {
     }
     db.collection('users').update(user.id, { passwordHash: await hashPassword(next) });
     audit('update', 'user', user.id, { meta: { field: 'password' } });
+    return ok({ ok: true });
+  });
+
+  /**
+   * Forgot password. No email infrastructure, so this raises a request for the
+   * Super Admin, who resets the account and shares a temporary password. Always
+   * returns ok so the response can never confirm whether an email exists.
+   */
+  router.post('/auth/forgot', async ({ body }) => {
+    const email = String(body?.email || '').trim().toLowerCase();
+    if (!email) badRequest('Enter your account email.');
+    const user = db.collection('users').findOne((u) => u.email.toLowerCase() === email && !u.platform);
+    if (user) {
+      const biz = db.collection('businesses').all().find((b) => b.merchantId === user.merchantId)?.name
+        || db.collection('merchants').get(user.merchantId)?.name || 'A merchant';
+      const recent = db.collection('platform_notifications').all().find(
+        (n) => n.type === 'password_reset' && n.meta?.userId === user.id && !n.read
+          && Date.now() - new Date(n.at).getTime() < 3600000,
+      );
+      if (!recent) {
+        notifyPlatform({
+          type: 'password_reset',
+          title: 'Password reset requested',
+          message: `${user.name} (${user.email}) at ${biz} asked to reset their password.`,
+          level: 'warning',
+          link: `#/merchants/${user.merchantId}`,
+          meta: { userId: user.id, merchantId: user.merchantId, email: user.email },
+        });
+      }
+      audit('update', 'user', user.id, { meta: { action: 'reset_requested' } });
+    }
     return ok({ ok: true });
   });
 }

@@ -10,6 +10,7 @@ use Afia\Http\Router;
 use Afia\Support\Audit;
 use Afia\Support\Clock;
 use Afia\Support\HttpError;
+use Afia\Support\Password;
 use Afia\Support\Provision;
 use Afia\Support\Uuid;
 
@@ -32,6 +33,7 @@ final class Platform
         $r->post('/platform/merchants/:id/notes', fn (Context $c, $p) => self::addMerchantNote($c, $p));
         $r->delete('/platform/merchants/:id/notes/:noteId', fn (Context $c, $p) => self::deleteMerchantNote($c, $p));
         $r->post('/platform/merchants/:id/message', fn (Context $c, $p) => self::messageMerchant($c, $p));
+        $r->post('/platform/merchants/:id/reset-owner', fn (Context $c, $p) => self::resetOwner($c, $p));
 
         $r->get('/platform/subscriptions', fn (Context $c) => self::subscriptions($c));
         $r->patch('/platform/subscriptions/:id', fn (Context $c, $p) => self::updateSubscription($c, $p));
@@ -761,6 +763,42 @@ final class Platform
         $doc['notes'] = array_values(array_filter((array) ($doc['notes'] ?? []), static fn ($n) => ($n['id'] ?? null) !== $p['noteId']));
         self::saveMerchantDoc($ctx, $p['id'], $doc);
         return Response::json(['deleted' => true]);
+    }
+
+    private static function resetOwner(Context $ctx, array $p): Response
+    {
+        $ctx->requirePlatformAdmin();
+        $mid = $p['id'];
+        $ctx->db->first('SELECT id FROM merchants WHERE id = :id', [':id' => $mid]) ?? throw HttpError::notFound('Merchant');
+        $staff = array_values(array_filter(
+            $ctx->db->all('SELECT id, email, role_id, doc FROM users WHERE merchant_id = :m AND is_platform_admin = 0', [':m' => $mid]),
+            static fn ($u) => empty(json_decode($u['doc'], true)['archivedAt']),
+        ));
+        if (!$staff) {
+            throw HttpError::badRequest('This merchant has no staff account to reset.');
+        }
+        $owner = null;
+        foreach ($staff as $u) {
+            if (($u['role_id'] ?? '') === 'role_owner') {
+                $owner = $u;
+            }
+        }
+        $owner = $owner ?: (array_values(array_filter($staff, static fn ($u) => ($u['role_id'] ?? '') === 'role_admin'))[0] ?? $staff[0]);
+
+        $temp = 'tx-' . bin2hex(random_bytes(3)) . random_int(10, 99);
+        $ctx->db->run('UPDATE users SET password_hash = :h, updated_at = :n WHERE id = :id',
+            [':h' => Password::hash($temp), ':n' => Clock::now(), ':id' => $owner['id']]);
+        $ctx->db->run('UPDATE sessions SET revoked_at = :n WHERE user_id = :u AND revoked_at IS NULL',
+            [':n' => Clock::now(), ':u' => $owner['id']]);
+        foreach ($ctx->db->all("SELECT id, doc FROM platform_notifications WHERE type = 'password_reset' AND is_read = 0 AND doc LIKE :m", [':m' => '%"merchantId":"' . $mid . '"%']) as $n) {
+            $d = json_decode($n['doc'], true);
+            $d['read'] = true;
+            $d['readAt'] = Clock::now();
+            $ctx->db->run('UPDATE platform_notifications SET is_read = 1, doc = :d WHERE id = :id', [':d' => json_encode($d), ':id' => $n['id']]);
+        }
+        Audit::record($ctx, 'update', 'user', $owner['id'], ['meta' => ['action' => 'password_reset_by_platform', 'merchantId' => $mid]]);
+        $ownerDoc = json_decode($owner['doc'], true);
+        return Response::json(['email' => $owner['email'], 'name' => $ownerDoc['name'] ?? $owner['email'], 'tempPassword' => $temp]);
     }
 
     private static function messageMerchant(Context $ctx, array $p): Response

@@ -93,6 +93,30 @@ await http.post('/platform/merchants/' + demoMerchantId + '/message', { title: '
 T('messaging a merchant logs an internal note', (await http.get('/platform/merchants/' + demoMerchantId)).merchant.notes.some((n) => n.kind === 'message'));
 await http.patch('/platform/merchants/' + demoMerchantId, { tags: [] }); // reset for later assertions
 
+// forgot-password ops flow: /auth/forgot -> Super Admin -> reset-owner
+await clearContext();
+const fp = await http.post('/auth/forgot', { email: 'admin@txdemo.shop' });
+T('/auth/forgot always returns ok (no user enumeration)', fp.ok === true);
+T('/auth/forgot on an unknown email also returns ok', (await http.post('/auth/forgot', { email: 'nobody@nowhere.test' })).ok === true);
+await login('superadmin@postxbd.app', 'superadmin123');
+T('a password_reset notification reached the Super Admin', (await http.get('/platform/notifications')).data.some((n) => n.type === 'password_reset'));
+const reset = await http.post('/platform/merchants/' + demoMerchantId + '/reset-owner');
+T('reset-owner returns the owner + a temporary password', reset.email === 'admin@txdemo.shop' && typeof reset.tempPassword === 'string' && reset.tempPassword.length >= 8);
+await clearContext();
+const relog = await http.post('/auth/login', { email: 'admin@txdemo.shop', password: reset.tempPassword });
+T('the owner can sign in with the temporary password', relog.user.email === 'admin@txdemo.shop');
+let oldPw = false;
+try { await http.post('/auth/login', { email: 'admin@txdemo.shop', password: 'demo1234' }); } catch (e) { oldPw = e.status === 401; }
+T('the old password no longer works', oldPw);
+T('the reset cleared the pending notification', !(await (async () => { await login('superadmin@postxbd.app', 'superadmin123'); return http.get('/platform/notifications'); })()).data.some((n) => n.type === 'password_reset' && !n.read));
+// restore the demo password so later suites / manual use keep working
+await http.post('/auth/change-password', { currentPassword: reset.tempPassword, newPassword: 'demo1234' }).catch(async () => {
+  await clearContext(); await http.post('/auth/login', { email: 'admin@txdemo.shop', password: reset.tempPassword });
+  await http.post('/auth/change-password', { currentPassword: reset.tempPassword, newPassword: 'demo1234' });
+});
+await clearContext();
+await login('superadmin@postxbd.app', 'superadmin123');
+
 /* the merchant renames their business in Settings -> propagates to Super Admin */
 await login('admin@txdemo.shop', 'demo1234');
 await http.put('/settings', { business: { name: 'TX Demo Retail', email: 'ops@txdemo.shop' } });

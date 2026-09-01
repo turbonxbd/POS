@@ -232,6 +232,21 @@ test('platform: dashboard + merchants + subscription lifecycle + revenue', funct
     expect(authed($kit, $rmanMsg, 'GET', '/api/notifications', [])['body']['total'] >= 1);
     authed($kit, $admin, 'PATCH', '/api/platform/merchants/' . $mid, ['json' => ['tags' => []]]);
 
+    // forgot-password ops flow: /auth/forgot (no enumeration) -> reset-owner
+    expect_eq($kit->request('POST', '/api/auth/forgot', ['json' => ['email' => 'rahman@store.bd']])['body']['ok'], true);
+    expect_eq($kit->request('POST', '/api/auth/forgot', ['json' => ['email' => 'ghost@nowhere.test']])['body']['ok'], true);
+    expect(count(array_filter(authed($kit, $admin, 'GET', '/api/platform/notifications', [])['body']['data'], static fn ($n) => $n['type'] === 'password_reset')) >= 1);
+    $reset = authed($kit, $admin, 'POST', '/api/platform/merchants/' . $mid . '/reset-owner', []);
+    expect_eq($reset['status'], 200, json_encode($reset['body']));
+    expect_eq($reset['body']['email'], 'rahman@store.bd');
+    expect(strlen($reset['body']['tempPassword']) >= 8);
+    $relog = $kit->request('POST', '/api/auth/login', ['json' => ['email' => 'rahman@store.bd', 'password' => $reset['body']['tempPassword']]]);
+    expect_eq($relog['status'], 200, json_encode($relog['body']));
+    expect_eq($kit->request('POST', '/api/auth/login', ['json' => ['email' => 'rahman@store.bd', 'password' => 'rahmanpw1']])['status'], 401);
+    // put the password back for the rest of the test
+    $rmanNew = $kit->loginAs('rahman@store.bd', $reset['body']['tempPassword']);
+    authed($kit, $rmanNew, 'POST', '/api/auth/change-password', ['json' => ['currentPassword' => $reset['body']['tempPassword'], 'newPassword' => 'rahmanpw1']]);
+
     // the merchant renames itself in Settings -> propagates to Super Admin + /auth/me
     $rman = $kit->loginAs('rahman@store.bd', 'rahmanpw1');
     authed($kit, $rman, 'PUT', '/api/settings', ['json' => ['business' => ['name' => 'Rahman Superstore', 'email' => 'hi@rahman.store']]]);

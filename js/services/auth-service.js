@@ -18,6 +18,9 @@ export const authService = {
   changePassword(currentPassword, newPassword) {
     return http.post('/auth/change-password', { currentPassword, newPassword });
   },
+  forgotPassword(email) {
+    return http.post('/auth/forgot', { email });
+  },
 };
 
 export default authService;

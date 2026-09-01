@@ -25,6 +25,7 @@ import { openExchangeReturn } from './pages/cashier/exchange-return.js';
 import { langSwitchHTML, wireLangSwitch } from './components/lang-switch.js';
 import { buildReceipt } from './pages/shared/receipt.js';
 import { mountSyncStatus } from './pages/cashier/sync-status.js';
+import { mountSubscriptionGuard } from './components/subscription-guard.js';
 import { xReport, zReport } from './pages/shared/register-report.js';
 
 const root = document.getElementById('pos-root');
@@ -149,6 +150,11 @@ function renderTerminal() {
   wireLangSwitch(topbar);
   mountSyncStatus(topbar.querySelector('.js-sync-mount'));
   const mount = root.querySelector('#pos');
+
+  // same subscription banner the Admin panel shows — a blocked subscription is
+  // already handled before this render, so this only ever surfaces the soft
+  // past-due / trial warning while the till keeps working.
+  mountSubscriptionGuard({ bannerBefore: mount, payHref: 'admin.html#/billing' });
 
   topbar.querySelector('.js-theme').addEventListener('click', (e) => {
     toggleTheme();

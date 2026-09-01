@@ -223,6 +223,23 @@ export default function register(router) {
     });
   });
 
+  /* ---- reset a merchant owner's password (forgot-password ops flow) ---- */
+  router.post('/platform/merchants/:id/reset-owner', async ({ params }) => {
+    requirePlatform();
+    const m = c('merchants').get(params.id);
+    if (!m) notFound('Merchant');
+    const staff = c('users').all().filter((u) => u.merchantId === m.id && !u.platform && !u.archivedAt);
+    const owner = staff.find((u) => u.roleId === 'role_owner') || staff.find((u) => u.roleId === 'role_admin') || staff[0];
+    if (!owner) badRequest('This merchant has no staff account to reset.');
+    const temp = 'tx-' + Math.random().toString(36).slice(2, 8) + Math.floor(Math.random() * 90 + 10);
+    c('users').update(owner.id, { passwordHash: await hashPassword(temp) });
+    c('platform_notifications').all()
+      .filter((n) => n.type === 'password_reset' && n.meta?.merchantId === m.id && !n.read)
+      .forEach((n) => c('platform_notifications').update(n.id, { read: true, readAt: now() }));
+    audit('update', 'user', owner.id, { meta: { action: 'password_reset_by_platform', merchantId: m.id } });
+    return ok({ email: owner.email, name: owner.name, tempPassword: temp });
+  });
+
   /* ---- merchant notes (internal CRM, never shown to the merchant) ---- */
   router.post('/platform/merchants/:id/notes', ({ params, body }) => {
     requirePlatform();

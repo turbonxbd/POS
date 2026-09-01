@@ -32,6 +32,42 @@ final class Auth
         $r->get('/auth/me', fn (Context $c) => self::me($c));
         $r->post('/auth/logout', fn (Context $c) => self::logout($c, $app));
         $r->post('/auth/change-password', fn (Context $c) => self::changePassword($c, $app));
+        $r->post('/auth/forgot', fn (Context $c) => self::forgot($c));
+    }
+
+    /**
+     * Forgot password. No mail infrastructure: raise a request for the Super
+     * Admin, who resets the account and shares a temporary password. Always
+     * returns ok so the response can never confirm whether an email exists.
+     */
+    private static function forgot(Context $ctx): Response
+    {
+        $email = mb_strtolower(trim((string) ($ctx->body()['email'] ?? '')));
+        if ($email === '') {
+            throw HttpError::badRequest('Enter your account email.');
+        }
+        $user = $ctx->db->first('SELECT id, merchant_id, doc FROM users WHERE LOWER(email) = :e AND is_platform_admin = 0', [':e' => $email]);
+        if ($user) {
+            $doc = json_decode($user['doc'], true);
+            $biz = $ctx->db->first('SELECT doc FROM businesses WHERE merchant_id = :m', [':m' => $user['merchant_id']]);
+            $bizName = $biz ? (json_decode($biz['doc'], true)['name'] ?? 'A merchant') : 'A merchant';
+            $recent = $ctx->db->first(
+                "SELECT id FROM platform_notifications WHERE type = 'password_reset' AND is_read = 0 AND doc LIKE :u AND at > :cut",
+                [':u' => '%"userId":"' . $user['id'] . '"%', ':cut' => (new \DateTimeImmutable())->modify('-1 hour')->format('Y-m-d\TH:i:s.v\Z')],
+            );
+            if (!$recent) {
+                Platform::notifyPlatform($ctx, [
+                    'type' => 'password_reset',
+                    'title' => 'Password reset requested',
+                    'message' => ($doc['name'] ?? $email) . " ({$email}) at {$bizName} asked to reset their password.",
+                    'level' => 'warning',
+                    'link' => "#/merchants/{$user['merchant_id']}",
+                    'meta' => ['userId' => $user['id'], 'merchantId' => $user['merchant_id'], 'email' => $email],
+                ]);
+            }
+            Audit::record($ctx, 'update', 'user', $user['id'], ['meta' => ['action' => 'reset_requested']]);
+        }
+        return Response::json(['ok' => true]);
     }
 
     /** Sign in with credentials already in the request body. Used by /signup. */
