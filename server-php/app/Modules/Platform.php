@@ -689,6 +689,24 @@ final class Platform
         $mDoc = json_decode($m['doc'], true);
         $notes = (array) ($mDoc['notes'] ?? []);
         usort($notes, static fn ($a, $b) => strcmp((string) ($b['at'] ?? ''), (string) ($a['at'] ?? '')));
+
+        $staff = array_map(static fn ($x) => json_decode($x['doc'], true), $ctx->db->all('SELECT doc FROM users WHERE merchant_id = :m AND is_platform_admin = 0', [':m' => $mid]));
+        $empPhone = [];
+        foreach ($ctx->db->all('SELECT doc FROM employees WHERE merchant_id = :m', [':m' => $mid]) as $e) {
+            $ed = json_decode($e['doc'], true);
+            if (!empty($ed['userId']) && !empty($ed['phone'])) {
+                $empPhone[$ed['userId']] = $ed['phone'];
+            }
+        }
+        $phoneOf = static fn ($u) => $u['phone'] ?? ($empPhone[$u['id']] ?? null);
+        $owner = null;
+        foreach ($staff as $u) {
+            if (($u['roleId'] ?? '') === 'role_owner') {
+                $owner = $u;
+            }
+        }
+        $owner = $owner ?: (array_values(array_filter($staff, static fn ($u) => ($u['roleId'] ?? '') === 'role_admin'))[0] ?? ($staff[0] ?? null));
+
         return Response::json([
             'merchant' => array_merge($mDoc, [
                 'status' => $m['status'], 'registeredAt' => $m['created_at'],
@@ -696,13 +714,18 @@ final class Platform
                 'notes' => $notes,
             ]),
             'business' => $biz ? json_decode($biz['doc'], true) : null,
+            'owner' => $owner ? [
+                'id' => $owner['id'], 'name' => $owner['name'], 'email' => $owner['email'],
+                'phone' => $phoneOf($owner), 'roleId' => $owner['roleId'] ?? null,
+                'status' => $owner['status'], 'lastLoginAt' => $owner['lastLoginAt'] ?? null,
+            ] : null,
             'subscription' => $subOut,
             'branchRequests' => array_map(static fn ($x) => json_decode($x['doc'], true), $ctx->db->all('SELECT doc FROM branch_requests WHERE merchant_id = :m ORDER BY at DESC', [':m' => $mid])),
             'branches' => array_map(static fn ($x) => json_decode($x['doc'], true), $ctx->db->all('SELECT doc FROM branches WHERE merchant_id = :m', [':m' => $mid])),
-            'users' => array_map(static function ($x) {
-                $u = json_decode($x['doc'], true);
-                return ['id' => $u['id'], 'name' => $u['name'], 'email' => $u['email'], 'roleId' => $u['roleId'] ?? null, 'status' => $u['status']];
-            }, $ctx->db->all('SELECT doc FROM users WHERE merchant_id = :m AND is_platform_admin = 0', [':m' => $mid])),
+            'users' => array_map(static fn ($u) => [
+                'id' => $u['id'], 'name' => $u['name'], 'email' => $u['email'],
+                'phone' => $phoneOf($u), 'roleId' => $u['roleId'] ?? null, 'status' => $u['status'],
+            ], $staff),
             'payments' => array_map(static fn ($x) => json_decode($x['doc'], true), $ctx->db->all('SELECT doc FROM subscription_payments WHERE merchant_id = :m ORDER BY at DESC', [':m' => $mid])),
             'usage' => [
                 'products' => (int) $ctx->db->value('SELECT COUNT(*) FROM products WHERE merchant_id = :m', [':m' => $mid]),

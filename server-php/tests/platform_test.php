@@ -200,6 +200,13 @@ test('platform: dashboard + merchants + subscription lifecycle + revenue', funct
     expect_eq($detail['body']['subscription']['liveStatus'], 'active');
     expect_eq(count($detail['body']['branches']), 1);
     expect_eq(count($detail['body']['users']), 1);
+    // owner login is exposed (email + phone); a password / hash never is
+    expect_eq($detail['body']['owner']['email'], 'rahman@store.bd');
+    expect(array_key_exists('phone', $detail['body']['owner']));
+    expect(!array_key_exists('password', $detail['body']['owner']) && !array_key_exists('passwordHash', $detail['body']['owner']));
+    foreach ($detail['body']['users'] as $u) {
+        expect(array_key_exists('phone', $u) && !array_key_exists('passwordHash', $u) && !array_key_exists('password', $u));
+    }
 
     // S9 pagination + S3 tags/notes + S2 message
     $paged = authed($kit, $admin, 'GET', '/api/platform/merchants', ['query' => ['pageSize' => 1, 'page' => 1]])['body'];

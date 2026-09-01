@@ -70,6 +70,11 @@ T('Super Admin shows the merchant as "TX Demo"', merchants.data[0].businessName 
 const detail = await http.get('/platform/merchants/' + demoMerchantId);
 T('merchant detail: subscription active, 2 branches, 1 user, usage stats',
   detail.subscription.liveStatus === 'active' && detail.branches.length === 2 && detail.users.length === 1 && detail.usage.sales > 0);
+T('merchant detail exposes the owner login (email + phone), never a password',
+  detail.owner && detail.owner.email === 'admin@txdemo.shop' && ('phone' in detail.owner)
+  && !('password' in detail.owner) && !('passwordHash' in detail.owner));
+T('merchant detail user rows carry a phone field (not a password)',
+  detail.users.every((u) => 'phone' in u && !('passwordHash' in u) && !('password' in u)));
 
 /* S9: merchant list is paginated; S3: tags + internal notes; S2: message a merchant */
 const paged = await http.get('/platform/merchants', { params: { pageSize: 1, page: 1 } });

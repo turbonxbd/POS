@@ -160,12 +160,18 @@ export default function register(router) {
     const m = c('merchants').get(params.id);
     if (!m) notFound('Merchant');
     const sub = subFor(m.id); const biz = businessOf(m.id);
+    const staff = c('users').all().filter((u) => u.merchantId === m.id && !u.platform);
+    const phoneOf = (u) => u.phone || c('employees').findOne({ userId: u.id })?.phone || null;
+    const ownerUser = staff.find((u) => u.roleId === 'role_owner') || staff.find((u) => u.roleId === 'role_admin') || staff[0] || null;
     return ok({
       merchant: { ...m, registeredAt: m.createdAt, tags: Array.isArray(m.tags) ? m.tags : [], notes: Array.isArray(m.notes) ? [...m.notes].sort((a, b) => (b.at || '').localeCompare(a.at || '')) : [] },
       business: biz || null,
+      owner: ownerUser
+        ? { id: ownerUser.id, name: ownerUser.name, email: ownerUser.email, phone: phoneOf(ownerUser), roleId: ownerUser.roleId, status: ownerUser.status, lastLoginAt: ownerUser.lastLoginAt || null }
+        : null,
       subscription: sub ? { ...sub, liveStatus: liveStatus(sub), dueAmount: dueAmount(sub), branchLimit: (sub.includedBranches || 0) + (sub.extraBranchesPaid || 0) } : null,
       branches: c('branches').all().filter((b) => b.merchantId === m.id),
-      users: c('users').all().filter((u) => u.merchantId === m.id && !u.platform).map((u) => ({ id: u.id, name: u.name, email: u.email, roleId: u.roleId, status: u.status })),
+      users: staff.map((u) => ({ id: u.id, name: u.name, email: u.email, phone: phoneOf(u), roleId: u.roleId, status: u.status })),
       payments: c('subscription_payments').all().filter((p) => p.merchantId === m.id).sort((a, b) => (b.at || '').localeCompare(a.at || '')),
       branchRequests: c('branch_requests').all().filter((r) => r.merchantId === m.id).sort((a, b) => (b.at || '').localeCompare(a.at || '')),
       usage: {

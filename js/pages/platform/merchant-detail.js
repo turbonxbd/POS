@@ -38,8 +38,21 @@ export default async function merchantDetailPage(ctx, mount) {
     { label: 'Manage subscription', variant: 'ghost', icon: 'rotate-ccw', onClick: manageSub },
   ]);
 
+  const owner = d.owner || null;
   p.body.innerHTML = `
     <div class="sa-detail-grid">
+      <div class="card card--pad">
+        <div class="form-section-title">Owner / login account</div>
+        ${owner ? `
+          <div class="sa-kv"><span>Name</span><b>${escapeHtml(owner.name || '—')}</b></div>
+          <div class="sa-kv"><span>Email (login)</span><b class="mono" style="user-select:all">${escapeHtml(owner.email || '—')}</b></div>
+          <div class="sa-kv"><span>Phone</span><b style="user-select:all">${escapeHtml(owner.phone || '—')}</b></div>
+          <div class="sa-kv"><span>Role</span><b>${escapeHtml(roleName(owner.roleId))}</b></div>
+          <div class="sa-kv"><span>Last sign-in</span><b>${owner.lastLoginAt ? fmtDateTime(owner.lastLoginAt) : 'never'}</b></div>
+          <div class="sa-kv"><span>Password</span><b>stored hashed — not viewable</b></div>
+          <button class="btn btn--outline btn--sm" style="margin-top:8px" id="reset-owner-inline">Reset &amp; get a temporary password</button>
+        ` : '<p class="muted">No staff account on record.</p>'}
+      </div>
       <div class="card card--pad">
         <div class="form-section-title">Subscription</div>
         ${sub ? `
@@ -74,7 +87,7 @@ export default async function merchantDetailPage(ctx, mount) {
     ${tableCard({ head: ['Name', 'Code', 'Status'], rows: d.branches.map((b) => `<tr><td>${escapeHtml(b.name)}</td><td>${escapeHtml(b.code || '—')}</td><td>${badge(b.status)}</td></tr>`) })}
 
     <h3 class="sa-h3">Users (${d.users.length})</h3>
-    ${tableCard({ head: ['Name', 'Email', 'Role', 'Status'], rows: d.users.map((u) => `<tr><td>${escapeHtml(u.name)}</td><td>${escapeHtml(u.email)}</td><td>${escapeHtml(roleName(u.roleId))}</td><td>${badge(u.status)}</td></tr>`) })}
+    ${tableCard({ head: ['Name', 'Email', 'Phone', 'Role', 'Status'], rows: d.users.map((u) => `<tr><td>${escapeHtml(u.name)}</td><td class="mono">${escapeHtml(u.email)}</td><td>${escapeHtml(u.phone || '—')}</td><td>${escapeHtml(roleName(u.roleId))}</td><td>${badge(u.status)}</td></tr>`) })}
 
     <h3 class="sa-h3">Payments (${d.payments.length})</h3>
     ${tableCard({
@@ -125,6 +138,7 @@ export default async function merchantDetailPage(ctx, mount) {
       reload();
     } catch (err) { toast.error(err?.data?.message || 'Could not update tags'); }
   };
+  p.body.querySelector('#reset-owner-inline')?.addEventListener('click', resetOwner);
   p.body.querySelector('.js-tag-add')?.addEventListener('click', () => {
     const inp = p.body.querySelector('.js-tag-input');
     const v = inp.value.trim();
