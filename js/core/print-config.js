@@ -31,6 +31,39 @@ export const UNITS = [
   { value: 'in', label: 'inch' },
 ];
 
+/**
+ * Stock type - mirrors the label printer driver's "Type" dropdown so the
+ * merchant can match it 1:1.
+ *   die-cut / continuous-fixed -> fixed page height (@page W H)
+ *   continuous-variable        -> the page grows to the content (@page W auto)
+ */
+export const STOCK_TYPES = [
+  { value: 'die-cut', label: 'Die-Cut Labels' },
+  { value: 'continuous-fixed', label: 'Continuous (Fixed Length)' },
+  { value: 'continuous-variable', label: 'Continuous (Variable Length)' },
+];
+
+/**
+ * Orientation - mirrors the driver's Orientation radio group. The SAME value
+ * the driver uses must be set here: our CSS pre-rotates the content by the same
+ * angle, which cancels the driver's rotation so the label prints upright.
+ *   portrait 0deg · landscape 90deg · portrait-180 180deg · landscape-180 270deg
+ */
+export const ORIENTATIONS = [
+  { value: 'portrait', label: 'Portrait', deg: 0 },
+  { value: 'landscape', label: 'Landscape', deg: 90 },
+  { value: 'portrait-180', label: 'Portrait 180°', deg: 180 },
+  { value: 'landscape-180', label: 'Landscape 180°', deg: 270 },
+];
+
+export function orientationToDeg(v) {
+  return (ORIENTATIONS.find((o) => o.value === v) || ORIENTATIONS[0]).deg;
+}
+export function degToOrientation(deg) {
+  const d = ((Math.round(Number(deg) || 0) % 360) + 360) % 360;
+  return (ORIENTATIONS.find((o) => o.deg === d) || ORIENTATIONS[0]).value;
+}
+
 /* ------------------------------------------------------------ defaults */
 
 export const DEFAULT_INVOICE = {
@@ -39,10 +72,16 @@ export const DEFAULT_INVOICE = {
   // Matched to the GP-3120TUC "POS" stock: Continuous (Variable Length),
   // 3.00 in max width, 7.00 in max length. pageHeightAuto keeps the roll
   // growing to the content so there is never a short-cut or a blank tail.
+  stockType: 'continuous-variable', // driver "Type" - see STOCK_TYPES
   pageWidth: 3,
   pageHeight: 7,
   pageHeightAuto: true, // let the page grow to fit the content (thermal rolls) - no blank pages
   unit: 'in', // mm | in
+
+  // Exposed liner widths (driver field), in the page unit. Kept off the print
+  // area on BOTH sides so nothing rides the label edge. 0 for a plain roll.
+  linerLeft: 0,
+  linerRight: 0,
 
   // B. outer spacing (page margins), millimetres.
   // The driver already reserves its own 0.5 in top/bottom feed area on the
@@ -113,10 +152,16 @@ export const DEFAULT_BARCODE = {
   // custom physical page size (the actual print page for EACH barcode)
   //
   // Matched to the GP-3120TUC "BARCODE L" stock: Die-Cut Labels, 1.50 in x
-  // 1.00 in, 0.08 in exposed liner each side (folded into marginLeft/Right).
+  // 1.00 in, 0.08 in exposed liner each side.
+  stockType: 'die-cut', // driver "Type" - see STOCK_TYPES
   pageWidth: 1.5,
   pageHeight: 1,
   unit: 'in', // mm | in
+
+  // Exposed liner widths (driver "Exposed Liner Widths"), in the page unit.
+  // The content box is inset by these so the bars never touch the die-cut edge.
+  linerLeft: 0.08,
+  linerRight: 0.08,
 
   // the barcode symbol box, millimetres
   // usable width = 38.1mm - 4mm side margins ~= 34mm; keep a quiet zone.
@@ -149,8 +194,12 @@ export const DEFAULT_BARCODE = {
    * driver's paper orientation is portrait). 90 or 270 also swap the emitted
    * @page to portrait so the printer stops re-rotating the page itself.
    */
-  // 180 matches the driver's "Portrait 180" orientation on the BARCODE L stock,
-  // so the printed label comes out upright instead of upside-down.
+  // orientation mirrors the driver's Orientation radio (see ORIENTATIONS).
+  // Set it to the SAME value as the driver: our CSS rotates the content by the
+  // same angle and cancels the driver's turn, so the label prints upright.
+  // printRotation is derived from it in barcodeConfig(); a direct printRotation
+  // in saved settings still wins (back-compat).
+  orientation: 'portrait-180',
   printRotation: 180,
 
   /**
@@ -200,19 +249,32 @@ export function invoiceConfig(settings = {}) {
     showTaxBreakdown: legacy.showTaxBreakdown ?? DEFAULT_INVOICE.showTaxBreakdown,
   };
   // migrate an old 58 / 80 / a4 receipt size into a concrete custom size
+  const savedInv = settings.print?.invoice || {};
   if (!settings.print?.invoice) {
     const p = settings.pos?.receiptSize;
     if (p === '58') Object.assign(seed, { pageWidth: 58, pageHeight: 150, unit: 'mm' });
     else if (p === '80') Object.assign(seed, { pageWidth: 80, pageHeight: 150, unit: 'mm' });
     else if (p === 'a4') Object.assign(seed, { pageWidth: 210, pageHeight: 297, unit: 'mm' });
   }
-  return { ...DEFAULT_INVOICE, ...seed, ...(settings.print?.invoice || {}) };
+  const cfg = { ...DEFAULT_INVOICE, ...seed, ...savedInv };
+  // Stock type <-> fixed/auto height. Only an explicitly saved stockType drives
+  // pageHeightAuto, so older configs (A4 fixed, etc.) keep their behaviour.
+  if (savedInv.stockType) cfg.pageHeightAuto = savedInv.stockType === 'continuous-variable';
+  else cfg.stockType = cfg.pageHeightAuto ? 'continuous-variable' : 'die-cut';
+  return cfg;
 }
 
 export function barcodeConfig(settings = {}) {
-  const merged = { ...DEFAULT_BARCODE, ...(settings.print?.barcode || {}), onePerPage: true };
+  const saved = settings.print?.barcode || {};
+  const merged = { ...DEFAULT_BARCODE, ...saved, onePerPage: true };
+  // orientation is the friendly control; printRotation is derived from it unless
+  // the saved config pins printRotation directly (older settings win).
+  if (saved.orientation && saved.printRotation == null) merged.printRotation = orientationToDeg(saved.orientation);
   const r = Math.round(Number(merged.printRotation) || 0) % 360;
   merged.printRotation = [0, 90, 180, 270].includes(r) ? r : 0;
+  merged.orientation = degToOrientation(merged.printRotation);
+  if (saved.stockType) merged.pageHeightAuto = saved.stockType === 'continuous-variable';
+  else merged.stockType = merged.pageHeightAuto ? 'continuous-variable' : 'die-cut';
   return merged;
 }
 
@@ -266,6 +328,10 @@ export default {
   toMm,
   clamp,
   UNITS,
+  STOCK_TYPES,
+  ORIENTATIONS,
+  orientationToDeg,
+  degToOrientation,
   DEFAULT_INVOICE,
   DEFAULT_BARCODE,
   DEFAULT_PRINT,

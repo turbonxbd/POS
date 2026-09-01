@@ -20,7 +20,7 @@ import { mediaService } from '../../services/media-service.js';
 import bus from '../../core/event-bus.js';
 import store from '../../core/store.js';
 import {
-  DEFAULT_INVOICE, DEFAULT_BARCODE, UNITS,
+  DEFAULT_INVOICE, DEFAULT_BARCODE, UNITS, STOCK_TYPES, ORIENTATIONS, orientationToDeg,
   invoiceConfig, barcodeConfig, resolveSize, SAMPLE_SALE, SAMPLE_LABEL_ITEMS,
 } from '../../core/print-config.js';
 import { buildReceipt } from '../shared/receipt.js';
@@ -269,6 +269,23 @@ export default async function settingsPage(ctx, mount) {
     c.querySelectorAll('[data-rerender]').forEach((el) =>
       el.addEventListener('change', () => { renderControls(); refreshPreview(); }),
     );
+    // Stock type drives the auto/fixed page height; keep them in step.
+    c.querySelector('#inv-stock-type')?.addEventListener('change', (e) => {
+      set('print.invoice.stockType', e.target.value);
+      set('print.invoice.pageHeightAuto', e.target.value === 'continuous-variable');
+      renderControls(); refreshPreview();
+    });
+    c.querySelector('#bc-stock-type')?.addEventListener('change', (e) => {
+      set('print.barcode.stockType', e.target.value);
+      set('print.barcode.pageHeightAuto', e.target.value === 'continuous-variable');
+      renderControls(); refreshPreview();
+    });
+    // Orientation is the friendly control; keep printRotation (degrees) in step.
+    c.querySelector('#bc-orientation')?.addEventListener('change', (e) => {
+      set('print.barcode.orientation', e.target.value);
+      set('print.barcode.printRotation', orientationToDeg(e.target.value));
+      refreshPreview();
+    });
     // invoice logo upload / replace / remove (shares business.logoId)
     c.querySelector('#inv-logo-input')?.addEventListener('change', async (e) => {
       const file = e.target.files[0];
@@ -295,15 +312,24 @@ export default async function settingsPage(ctx, mount) {
     const logoUrl = b.logoId ? mediaService.getUrl(b.logoId) : null;
     const mm = (p, l, extra = 'min="0" step="0.5"') => field(l, `print.invoice.${p}`, numI(`print.invoice.${p}`, iv[p], extra));
     const sz = resolveSize(iv);
+    const u = iv.unit === 'in' ? 'in' : 'mm';
     return `
-      <div class="form-section-title">Page size</div>
+      <div class="form-section-title">Stock — match your printer driver</div>
+      <p class="field-hint">Open the printer's <strong>Printing Preferences → Stock</strong> and copy the same <strong>Type</strong>, <strong>size</strong> and <strong>Exposed Liner Widths</strong> here. Invoice and Barcode are independent — they never share a value.</p>
       <div class="field-grid">
-        ${field('Width', 'print.invoice.pageWidth', numI('print.invoice.pageWidth', iv.pageWidth, 'min="10" step="0.1"'))}
-        ${field('Height / length', 'print.invoice.pageHeight', numI('print.invoice.pageHeight', iv.pageHeight, 'min="10" step="0.1"'))}
+        ${field('Type', 'print.invoice.stockType', `<select class="select" id="inv-stock-type">${STOCK_TYPES.map((o) => `<option value="${o.value}" ${o.value === (iv.stockType || 'continuous-variable') ? 'selected' : ''}>${o.label}</option>`).join('')}</select>`)}
         ${field('Unit', 'print.invoice.unit', sel('print.invoice.unit', iv.unit, UNITS))}
       </div>
-      ${sw('print.invoice.pageHeightAuto', iv.pageHeightAuto, 'Auto height — grow to fit content (recommended for thermal rolls)')}
-      <p class="field-hint">Print page targets <strong>${sz.w}${sz.unit} × ${iv.pageHeightAuto ? 'auto' : sz.h + sz.unit}</strong> (${sz.wMm.toFixed(1)} mm wide) at 100% / actual size.</p>
+      <div class="field-grid">
+        ${field(`Width (${u})`, 'print.invoice.pageWidth', numI('print.invoice.pageWidth', iv.pageWidth, 'min="10" step="0.1"'))}
+        ${field(`Max length (${u})`, 'print.invoice.pageHeight', numI('print.invoice.pageHeight', iv.pageHeight, 'min="10" step="0.1"'))}
+      </div>
+      <div class="field-grid">
+        ${field(`Exposed liner — left (${u})`, 'print.invoice.linerLeft', numI('print.invoice.linerLeft', iv.linerLeft ?? 0, 'min="0" step="0.01"'))}
+        ${field(`Exposed liner — right (${u})`, 'print.invoice.linerRight', numI('print.invoice.linerRight', iv.linerRight ?? 0, 'min="0" step="0.01"'))}
+      </div>
+      ${sw('print.invoice.pageHeightAuto', iv.pageHeightAuto, 'Auto height — grow to fit content (on for Continuous / Variable Length)')}
+      <p class="field-hint">Print page targets <strong>${sz.w}${sz.unit} × ${iv.pageHeightAuto ? 'auto' : sz.h + sz.unit}</strong> (${sz.wMm.toFixed(1)} mm wide) at 100% / actual size. In the browser print dialog set <strong>Scale 100%</strong>, <strong>Margins: None</strong>, headers/footers off.</p>
 
       <div class="form-section-title">Spacing</div>
       <div class="field-grid">
@@ -391,18 +417,28 @@ export default async function settingsPage(ctx, mount) {
     const mm = (p, l, extra = 'min="0" step="0.5"') => field(l, `print.barcode.${p}`, numI(`print.barcode.${p}`, bc[p], extra));
     const px = (p, l) => field(l + ' (px)', `print.barcode.${p}`, numI(`print.barcode.${p}`, bc[p], 'min="5" max="28" step="0.5"'));
     const sz = resolveSize(bc);
+    const u = bc.unit === 'in' ? 'in' : 'mm';
     return `
       <div class="alert alert--info" style="margin-bottom:var(--sp-3)"><div class="alert__body">
         <strong>One barcode = one page.</strong> Always on. 10 barcodes → 10 separate pages.
+        These settings are fully separate from the Invoice tab.
       </div></div>
 
-      <div class="form-section-title">Page size</div>
+      <div class="form-section-title">Stock — match your printer driver</div>
+      <p class="field-hint">Copy the printer's <strong>Printing Preferences → Stock</strong>: same <strong>Type</strong>, <strong>Label Size</strong> and <strong>Exposed Liner Widths</strong>. For "BARCODE L" that is Die-Cut Labels, 1.5 × 1.0 in, liner 0.08 in each side.</p>
       <div class="field-grid">
-        ${field('Width', 'print.barcode.pageWidth', numI('print.barcode.pageWidth', bc.pageWidth, 'min="5" step="0.1"'))}
-        ${field('Height / length', 'print.barcode.pageHeight', numI('print.barcode.pageHeight', bc.pageHeight, 'min="5" step="0.1"'))}
+        ${field('Type', 'print.barcode.stockType', `<select class="select" id="bc-stock-type">${STOCK_TYPES.map((o) => `<option value="${o.value}" ${o.value === (bc.stockType || 'die-cut') ? 'selected' : ''}>${o.label}</option>`).join('')}</select>`)}
         ${field('Unit', 'print.barcode.unit', sel('print.barcode.unit', bc.unit, UNITS))}
       </div>
-      <p class="field-hint">Every barcode page targets <strong>${sz.w}${sz.unit} × ${sz.h}${sz.unit}</strong> (${sz.wMm.toFixed(1)} × ${sz.hMm.toFixed(1)} mm) at actual size.</p>
+      <div class="field-grid">
+        ${field(`Label width (${u})`, 'print.barcode.pageWidth', numI('print.barcode.pageWidth', bc.pageWidth, 'min="5" step="0.1"'))}
+        ${field(`Label height (${u})`, 'print.barcode.pageHeight', numI('print.barcode.pageHeight', bc.pageHeight, 'min="5" step="0.1"'))}
+      </div>
+      <div class="field-grid">
+        ${field(`Exposed liner — left (${u})`, 'print.barcode.linerLeft', numI('print.barcode.linerLeft', bc.linerLeft ?? 0, 'min="0" step="0.01"'))}
+        ${field(`Exposed liner — right (${u})`, 'print.barcode.linerRight', numI('print.barcode.linerRight', bc.linerRight ?? 0, 'min="0" step="0.01"'))}
+      </div>
+      <p class="field-hint">Every barcode page targets <strong>${sz.w}${sz.unit} × ${sz.h}${sz.unit}</strong> (${sz.wMm.toFixed(1)} × ${sz.hMm.toFixed(1)} mm). The liner is kept clear on both sides so the bars never touch the die-cut edge.</p>
 
       <div class="form-section-title">Barcode size</div>
       <div class="field-grid">
@@ -455,13 +491,8 @@ export default async function settingsPage(ctx, mount) {
 
       <div class="form-section-title">Position</div>
       ${field('Alignment', 'print.barcode.align', sel('print.barcode.align', bc.align, [{ value: 'left', label: 'Left' }, { value: 'center', label: 'Center' }, { value: 'right', label: 'Right' }]))}
-      ${field('Print rotation', 'print.barcode.printRotation', sel('print.barcode.printRotation', String(bc.printRotation ?? 0), [
-        { value: '0', label: '0° — normal' },
-        { value: '90', label: '90° clockwise' },
-        { value: '180', label: '180° (upside down)' },
-        { value: '270', label: '270° (90° anti-clockwise)' },
-      ]))}
-      <p class="field-hint">Only affects the <strong>physical print</strong>, never this preview. The printed page always stays your configured label size. Use 90 or 270 if the printer sends the barcode out sideways / bottom-to-top (best for square or portrait labels); use 0 for a normal wide label and turn off the printer driver's own rotation instead.</p>`;
+      ${field('Orientation — same as the printer driver', 'print.barcode.orientation', `<select class="select" id="bc-orientation">${ORIENTATIONS.map((o) => `<option value="${o.value}" ${o.value === (bc.orientation || 'portrait') ? 'selected' : ''}>${o.label}</option>`).join('')}</select>`)}
+      <p class="field-hint">Set this to the <strong>exact same Orientation</strong> selected in the printer driver (Portrait / Landscape / Portrait 180° / Landscape 180°). The label then prints upright — our layout rotates to cancel the driver's turn. Affects the physical print only, never this preview.</p>`;
   }
 
   /* ---- preview ---- */

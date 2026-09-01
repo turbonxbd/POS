@@ -58,11 +58,11 @@ T('print.invoice overrides legacy', ivNew.headerText === 'NEW' && ivNew.pageWidt
 
 /* ---------- buildReceipt: exact @page + toggles ---------- */
 const S = pc.SAMPLE_SALE;
-const r1 = buildReceipt(S, { settings: { print: { invoice: { ...pc.DEFAULT_INVOICE, pageWidth: 80, pageHeight: 150, unit: 'mm', pageHeightAuto: false } } } });
+const r1 = buildReceipt(S, { settings: { print: { invoice: { ...pc.DEFAULT_INVOICE, stockType: 'continuous-fixed', pageWidth: 80, pageHeight: 150, unit: 'mm', pageHeightAuto: false } } } });
 T('80x150mm -> @page size: 80mm 150mm', /@page\s*{\s*size:\s*80mm 150mm;\s*margin:\s*0/.test(r1), r1.slice(0, 120));
 T('receipt container width 80mm', /\.receipt-preview\.inv-doc\s*{[\s\S]*?width:\s*80mm/.test(r1));
 T('no A4 / Letter substitution', !/size:\s*A4/i.test(r1) && !/size:\s*letter/i.test(r1) && !r1.includes('210mm 297mm'));
-const rIn = buildReceipt(S, { settings: { print: { invoice: { ...pc.DEFAULT_INVOICE, pageWidth: 3, pageHeight: 5, unit: 'in', pageHeightAuto: false } } } });
+const rIn = buildReceipt(S, { settings: { print: { invoice: { ...pc.DEFAULT_INVOICE, stockType: 'continuous-fixed', pageWidth: 3, pageHeight: 5, unit: 'in', pageHeightAuto: false } } } });
 T('3x5in -> @page size: 3in 5in', /@page\s*{\s*size:\s*3in 5in/.test(rIn));
 const rAuto = buildReceipt(S, { settings: { print: { invoice: { ...pc.DEFAULT_INVOICE, pageWidth: 80, unit: 'mm', pageHeightAuto: true } } } });
 T('auto height -> @page size: 80mm auto', /@page\s*{\s*size:\s*80mm auto/.test(rAuto));
@@ -130,6 +130,24 @@ T('printRotation garbage value falls back to 0', pc.barcodeConfig({ print: { bar
 T('each label carries data-fit-* so print can shrink overflow to the physical label', /class="bc-canvas" data-fit-w="50" data-fit-h="30" data-fit-pad="[\d.|]+"/.test(bcR0));
 T('printRotation 90 -> data-fit swapped to 30 x 50', /data-fit-w="30" data-fit-h="50"/.test(bcR90));
 
+/* ---------- barcode: exposed liner + orientation + stock type ---------- */
+const bcLiner = buildBarcodePages([pc.SAMPLE_LABEL_ITEMS[0]], { settings: { print: { barcode: { ...pc.DEFAULT_BARCODE, pageWidth: 50, pageHeight: 30, unit: 'mm', linerLeft: 3, linerRight: 3, marginLeft: 1, marginRight: 1, printRotation: 0 } } } });
+T('exposed liner folds into the canvas horizontal padding (1 + 3 = 4mm each side)', /\.bc-canvas\s*{[^}]*padding:\s*[\d.]+mm 4mm [\d.]+mm 4mm/.test(bcLiner));
+T('default barcode = die-cut, 0.08in liner each side, portrait-180', pc.DEFAULT_BARCODE.stockType === 'die-cut' && pc.DEFAULT_BARCODE.linerLeft === 0.08 && pc.barcodeConfig({}).printRotation === 180 && pc.barcodeConfig({}).orientation === 'portrait-180');
+T('orientation -> degrees (driver-match)', pc.barcodeConfig({ print: { barcode: { orientation: 'portrait', printRotation: null } } }).printRotation === 0
+  && pc.barcodeConfig({ print: { barcode: { orientation: 'portrait-180', printRotation: null } } }).printRotation === 180
+  && pc.barcodeConfig({ print: { barcode: { orientation: 'landscape', printRotation: null } } }).printRotation === 90
+  && pc.barcodeConfig({ print: { barcode: { orientation: 'landscape-180', printRotation: null } } }).printRotation === 270);
+T('a saved printRotation still wins over orientation (back-compat)', pc.barcodeConfig({ print: { barcode: { orientation: 'portrait', printRotation: 90 } } }).printRotation === 90);
+const bcVar = buildBarcodePages([pc.SAMPLE_LABEL_ITEMS[0]], { settings: { print: { barcode: { ...pc.DEFAULT_BARCODE, pageWidth: 50, pageHeight: 30, unit: 'mm', stockType: 'continuous-variable', printRotation: 0 } } } });
+T('continuous-variable barcode stock -> @page auto height', /@page\s*{\s*size:\s*50mm auto/.test(bcVar));
+const bcDie = buildBarcodePages([pc.SAMPLE_LABEL_ITEMS[0]], { settings: { print: { barcode: { ...pc.DEFAULT_BARCODE, pageWidth: 50, pageHeight: 30, unit: 'mm', stockType: 'die-cut', printRotation: 0 } } } });
+T('die-cut barcode stock -> fixed @page height', /@page\s*{\s*size:\s*50mm 30mm/.test(bcDie));
+
+/* ---------- invoice: exposed liner ---------- */
+const ivLiner = buildReceipt(S, { settings: { print: { invoice: { ...pc.DEFAULT_INVOICE, stockType: 'continuous-fixed', pageWidth: 80, pageHeight: 150, unit: 'mm', marginLeft: 2, marginRight: 2, linerLeft: 4, linerRight: 4 } } } });
+T('invoice exposed liner folds into the container padding (2 + 4 = 6mm each side)', /\.receipt-preview\.inv-doc\s*{[^}]*padding:\s*[\d.]+mm 6mm [\d.]+mm 6mm/.test(ivLiner));
+
 /* ---------- Settings page wiring ---------- */
 document.body.innerHTML = '<div id="app-root"></div><div id="print-root"></div>';
 const mount = document.getElementById('app-root');
@@ -139,6 +157,7 @@ await sleep(140);
 T('Print panel renders sub-tabs', !!mount.querySelector('#print-subtabs') && !!mount.querySelector('#print-controls'));
 T('Invoice: width/height/unit inputs', !!mount.querySelector('[data-p="print.invoice.pageWidth"]') && !!mount.querySelector('[data-p="print.invoice.pageHeight"]') && !!mount.querySelector('[data-p="print.invoice.unit"]'));
 T('Invoice: image upload + spacing inputs', !!mount.querySelector('#inv-logo-input') && !!mount.querySelector('[data-p="print.invoice.marginTop"]'));
+T('Invoice: stock type + exposed liner fields present', !!mount.querySelector('#inv-stock-type') && !!mount.querySelector('[data-p="print.invoice.linerLeft"]') && !!mount.querySelector('[data-p="print.invoice.linerRight"]'));
 T('Invoice preview rendered a receipt', !!mount.querySelector('#preview-scale .receipt-preview'));
 T('Test print + Reset + Save buttons', !!mount.querySelector('#print-test') && !!mount.querySelector('#print-reset') && !!mount.querySelector('#print-save'));
 
@@ -146,7 +165,9 @@ mount.querySelector('#print-subtabs button[data-t="barcode"]').click();
 await sleep(140);
 T('Barcode: width/height/unit inputs', !!mount.querySelector('[data-p="print.barcode.pageWidth"]') && !!mount.querySelector('[data-p="print.barcode.unit"]'));
 T('Barcode: barcode size + align inputs', !!mount.querySelector('[data-p="print.barcode.barcodeWidthMm"]') && !!mount.querySelector('[data-p="print.barcode.align"]'));
-T('Barcode: print rotation control present', !!mount.querySelector('[data-p="print.barcode.printRotation"]') && mount.querySelector('[data-p="print.barcode.printRotation"]').tagName === 'SELECT');
+T('Barcode: orientation control present', !!mount.querySelector('#bc-orientation') && mount.querySelector('#bc-orientation').tagName === 'SELECT');
+T('Barcode: stock type control present', !!mount.querySelector('#bc-stock-type'));
+T('Barcode: exposed liner fields present', !!mount.querySelector('[data-p="print.barcode.linerLeft"]') && !!mount.querySelector('[data-p="print.barcode.linerRight"]'));
 T('Barcode preview rendered one bc-page', !!mount.querySelector('#preview-scale .bc-page'));
 T('Barcode preview meta says 1 barcode = 1 page', /1 barcode = 1 page/.test(mount.querySelector('#preview-meta').textContent));
 

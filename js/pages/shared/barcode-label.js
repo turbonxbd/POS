@@ -11,15 +11,24 @@
 import { escapeHtml } from '../../utils/dom.js';
 import money from '../../utils/money.js';
 import { renderBarcode } from '../../components/barcode.js';
-import { barcodeConfig, resolveSize, clamp } from '../../core/print-config.js';
+import { barcodeConfig, resolveSize, clamp, toMm } from '../../core/print-config.js';
 import store from '../../core/store.js';
 
 const MM_PX = 96 / 25.4; // CSS reference px per mm
 
+/** Exposed-liner widths in mm (driver field), resolved in the page's unit. */
+function linerMm(cfg) {
+  return {
+    left: Math.max(0, toMm(Number(cfg.linerLeft) || 0, cfg.unit)),
+    right: Math.max(0, toMm(Number(cfg.linerRight) || 0, cfg.unit)),
+  };
+}
+
 /** One barcode page's inner content (the stacked elements). */
 export function renderBarcodeCard(item, cfg, { bizName = '' } = {}) {
   const sz = resolveSize(cfg);
-  const innerWmm = Math.max(2, sz.wMm - cfg.marginLeft - cfg.marginRight);
+  const lnr = linerMm(cfg);
+  const innerWmm = Math.max(2, sz.wMm - cfg.marginLeft - cfg.marginRight - lnr.left - lnr.right);
   const innerHmm = Math.max(2, sz.hMm - cfg.marginTop - cfg.marginBottom);
 
   // barcode symbol: honour configured width/height, but never exceed the printable area
@@ -83,15 +92,28 @@ function style(cfg, sz) {
   const canvasH = quarter ? sz.w : sz.h; // pre-rotation canvas height
   const rotCss = rot ? `transform: rotate(${rot}deg);` : '';
 
+  // Continuous (Variable Length) stock: the label grows down the roll to fit
+  // the content, so emit an auto page height. Die-Cut / Fixed keep the exact
+  // physical size. Auto is ignored under a 90/270 turn (undefined geometry).
+  const auto = !!cfg.pageHeightAuto && !quarter;
+  const pageSize = auto ? `${sz.w}${sz.unit} auto` : `${sz.w}${sz.unit} ${sz.h}${sz.unit}`;
+  const pageHeightCss = auto ? `min-height: ${sz.h}${sz.unit}; height: auto;` : `height: ${sz.h}${sz.unit};`;
+
+  // Exposed liner widths fold into the canvas's horizontal padding so the bars
+  // never ride the die-cut edge (matches the driver's "Exposed Liner Widths").
+  const lnr = linerMm(cfg);
+  const padLeft = (Number(cfg.marginLeft) || 0) + lnr.left;
+  const padRight = (Number(cfg.marginRight) || 0) + lnr.right;
+
   return `<style>
     /* Real physical label size. Never auto-converted to A4 / Letter, never swapped. */
-    @page { size: ${sz.w}${sz.unit} ${sz.h}${sz.unit}; margin: 0; }
+    @page { size: ${pageSize}; margin: 0; }
 
     /* ---- shared (screen preview keeps the label upright, unrotated) ---- */
     .bc-run { width: ${sz.w}${sz.unit}; margin: 0 auto; }
     .bc-page {
       box-sizing: border-box; overflow: hidden; background: #fff; color: #000;
-      width: ${sz.w}${sz.unit}; height: ${sz.h}${sz.unit};
+      width: ${sz.w}${sz.unit}; ${pageHeightCss}
       margin: 0 auto;
       /* frame only - centres the label canvas on both axes */
       display: flex; align-items: center; justify-content: center;
@@ -101,8 +123,8 @@ function style(cfg, sz) {
        It is the element that gets rotated for the physical print. */
     .bc-canvas {
       box-sizing: border-box;
-      width: ${sz.w}${sz.unit}; height: ${sz.h}${sz.unit};
-      padding: ${cfg.marginTop}mm ${cfg.marginRight}mm ${cfg.marginBottom}mm ${cfg.marginLeft}mm;
+      width: ${sz.w}${sz.unit}; ${pageHeightCss}
+      padding: ${cfg.marginTop}mm ${padRight}mm ${cfg.marginBottom}mm ${padLeft}mm;
       display: flex; flex-direction: column;
       align-items: ${alignItems}; justify-content: center;
     }
@@ -126,7 +148,7 @@ function style(cfg, sz) {
          layout dimensions (swapped for a 90/270 turn) and is rotated + clipped
          inside the fixed page so nothing bleeds onto the next physical label. */
       .bc-page {
-        width: ${sz.w}${sz.unit}; height: ${sz.h}${sz.unit};
+        width: ${sz.w}${sz.unit}; ${pageHeightCss}
         margin: 0 auto; overflow: hidden;
       }
       /* Break AFTER every label except the last -> exactly N pages, no trailing
@@ -134,7 +156,7 @@ function style(cfg, sz) {
       .bc-page:not(:last-child) { break-after: page; page-break-after: always; }
       .bc-page:last-child { break-after: auto; page-break-after: auto; }
       .bc-canvas {
-        width: ${canvasW}${sz.unit}; height: ${canvasH}${sz.unit};
+        width: ${canvasW}${sz.unit}; ${auto ? 'min-height: ' + canvasH + sz.unit + '; height: auto;' : 'height: ' + canvasH + sz.unit + ';'}
         overflow: hidden;
         transform-origin: center center; ${rotCss}
       }

@@ -14,7 +14,7 @@ import { fmtDate, fmtTime } from '../../utils/date.js';
 import { renderBarcode } from '../../components/barcode.js';
 import { mediaService } from '../../services/media-service.js';
 import store from '../../core/store.js';
-import { invoiceConfig, resolveSize } from '../../core/print-config.js';
+import { invoiceConfig, resolveSize, toMm } from '../../core/print-config.js';
 
 export function buildReceipt(sale, { settings = {} } = {}) {
   const cfg = invoiceConfig(settings);
@@ -109,6 +109,9 @@ function logoStyle(cfg) {
 function style(cfg, sz) {
   const auto = cfg.pageHeightAuto || Number(cfg.pageHeight) <= 0;
   const pageSize = auto ? `${sz.w}${sz.unit} auto` : `${sz.w}${sz.unit} ${sz.h}${sz.unit}`;
+  // Exposed liner widths (driver field) fold into the horizontal padding.
+  const padLeft = (Number(cfg.marginLeft) || 0) + Math.max(0, toMm(Number(cfg.linerLeft) || 0, cfg.unit));
+  const padRight = (Number(cfg.marginRight) || 0) + Math.max(0, toMm(Number(cfg.linerRight) || 0, cfg.unit));
   return `<style>
     @page { size: ${pageSize}; margin: 0; }
     .receipt-preview.inv-doc {
@@ -116,7 +119,7 @@ function style(cfg, sz) {
       width: ${sz.w}${sz.unit};
       ${auto ? '' : `min-height: ${sz.h}${sz.unit};`}
       margin: 0 auto;
-      padding: ${cfg.marginTop}mm ${cfg.marginRight}mm ${cfg.marginBottom}mm ${cfg.marginLeft}mm;
+      padding: ${cfg.marginTop}mm ${padRight}mm ${cfg.marginBottom}mm ${padLeft}mm;
       background: #fff; color: #000;
       font-family: var(--font-mono, ui-monospace, monospace);
       font-size: ${cfg.fontSize}px; line-height: ${cfg.lineHeight};
