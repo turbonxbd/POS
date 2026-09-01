@@ -173,6 +173,25 @@ await settingsPage({ params: {}, query: { section: 'print' } }, mount);
 await sleep(140);
 T('Print panel renders sub-tabs', !!mount.querySelector('#print-subtabs') && !!mount.querySelector('#print-controls'));
 T('Invoice: width/height/unit inputs', !!mount.querySelector('[data-p="print.invoice.pageWidth"]') && !!mount.querySelector('[data-p="print.invoice.pageHeight"]') && !!mount.querySelector('[data-p="print.invoice.unit"]'));
+{
+  // Real bug found + fixed: with the driver-matched default (unit "in",
+  // pageWidth 3), the Width/Height inputs still carried an mm-era min="10",
+  // so the browser flagged a perfectly correct "3" as :invalid. min must
+  // track the active unit.
+  const wEl = mount.querySelector('[data-p="print.invoice.pageWidth"]');
+  const hEl = mount.querySelector('[data-p="print.invoice.pageHeight"]');
+  T('Invoice: Width/Height min matches the "in" unit (not an mm-era min="10")', wEl.min === '0.5' && hEl.min === '0.5' && Number(wEl.value) >= Number(wEl.min));
+}
+// switching the Unit select must re-sync the min live, not just on next reload
+{
+  mount.querySelector('[data-p="print.invoice.unit"]').value = 'mm';
+  mount.querySelector('[data-p="print.invoice.unit"]').dispatchEvent(new window.Event('change'));
+  await sleep(30);
+  T('Invoice: switching Unit to mm live-updates the Width min back to 10', mount.querySelector('[data-p="print.invoice.pageWidth"]').min === '10');
+  mount.querySelector('[data-p="print.invoice.unit"]').value = 'in';
+  mount.querySelector('[data-p="print.invoice.unit"]').dispatchEvent(new window.Event('change'));
+  await sleep(30);
+}
 T('Invoice: image upload + spacing inputs', !!mount.querySelector('#inv-logo-input') && !!mount.querySelector('[data-p="print.invoice.marginTop"]'));
 T('Invoice: stock type + exposed liner fields present', !!mount.querySelector('#inv-stock-type') && !!mount.querySelector('[data-p="print.invoice.linerLeft"]') && !!mount.querySelector('[data-p="print.invoice.linerRight"]'));
 T('Invoice: orientation control present', !!mount.querySelector('#inv-orientation') && mount.querySelector('#inv-orientation').tagName === 'SELECT');
@@ -182,6 +201,10 @@ T('Test print + Reset + Save buttons', !!mount.querySelector('#print-test') && !
 mount.querySelector('#print-subtabs button[data-t="barcode"]').click();
 await sleep(140);
 T('Barcode: width/height/unit inputs', !!mount.querySelector('[data-p="print.barcode.pageWidth"]') && !!mount.querySelector('[data-p="print.barcode.unit"]'));
+{
+  const wEl = mount.querySelector('[data-p="print.barcode.pageWidth"]');
+  T('Barcode: Width min matches the "in" unit (default 1.5in label, not mm-era min="5")', wEl.min === '0.2' && Number(wEl.value) >= Number(wEl.min));
+}
 T('Barcode: barcode size + align inputs', !!mount.querySelector('[data-p="print.barcode.barcodeWidthMm"]') && !!mount.querySelector('[data-p="print.barcode.align"]'));
 T('Barcode: orientation control present', !!mount.querySelector('#bc-orientation') && mount.querySelector('#bc-orientation').tagName === 'SELECT');
 T('Barcode: stock type control present', !!mount.querySelector('#bc-stock-type'));

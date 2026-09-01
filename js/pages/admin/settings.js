@@ -82,7 +82,7 @@ export default async function settingsPage(ctx, mount) {
   const text = (path, val, extra = '') => `<input class="input js-f" data-p="${path}" value="${escapeHtml(val ?? '')}" ${extra}>`;
   const numI = (path, val, extra = '') => `<input class="input js-f" type="number" data-p="${path}" value="${val ?? 0}" ${extra}>`;
   const sw = (path, val, label) => `<label class="switch"><input type="checkbox" class="js-f" data-p="${path}" data-bool="1" ${val ? 'checked' : ''}><span class="switch__track"><span class="switch__thumb"></span></span><span>${escapeHtml(label)}</span></label>`;
-  const sel = (path, val, opts) => `<select class="select js-f" data-p="${path}">${opts.map((o) => `<option value="${o.value}" ${String(o.value) === String(val) ? 'selected' : ''}>${escapeHtml(o.label)}</option>`).join('')}</select>`;
+  const sel = (path, val, opts, attrs = '') => `<select class="select js-f" data-p="${path}" ${attrs}>${opts.map((o) => `<option value="${o.value}" ${String(o.value) === String(val) ? 'selected' : ''}>${escapeHtml(o.label)}</option>`).join('')}</select>`;
   const area = (path, val, rows = 3) => `<textarea class="textarea js-f" data-p="${path}" rows="${rows}">${escapeHtml(val || '')}</textarea>`;
   const togGrid = (pairs) => `<div class="tog-grid">${pairs.map(([p, l]) => sw(p, get(p), l)).join('')}</div>`;
 
@@ -323,11 +323,11 @@ export default async function settingsPage(ctx, mount) {
       <p class="field-hint">Open the printer's <strong>Printing Preferences → Stock</strong> and copy the same <strong>Type</strong>, <strong>size</strong> and <strong>Exposed Liner Widths</strong> here. Invoice and Barcode are independent — they never share a value.</p>
       <div class="field-grid">
         ${field('Type', 'print.invoice.stockType', `<select class="select" id="inv-stock-type">${STOCK_TYPES.map((o) => `<option value="${o.value}" ${o.value === (iv.stockType || 'continuous-variable') ? 'selected' : ''}>${o.label}</option>`).join('')}</select>`)}
-        ${field('Unit', 'print.invoice.unit', sel('print.invoice.unit', iv.unit, UNITS))}
+        ${field('Unit', 'print.invoice.unit', sel('print.invoice.unit', iv.unit, UNITS, 'data-rerender'))}
       </div>
       <div class="field-grid">
-        ${field(`Width (${u})`, 'print.invoice.pageWidth', numI('print.invoice.pageWidth', iv.pageWidth, 'min="10" step="0.1"'))}
-        ${field(`Max length (${u})`, 'print.invoice.pageHeight', numI('print.invoice.pageHeight', iv.pageHeight, 'min="10" step="0.1"'))}
+        ${field(`Width (${u})`, 'print.invoice.pageWidth', numI('print.invoice.pageWidth', iv.pageWidth, `min="${u === 'in' ? '0.5' : '10'}" step="0.1"`))}
+        ${field(`Max length (${u})`, 'print.invoice.pageHeight', numI('print.invoice.pageHeight', iv.pageHeight, `min="${u === 'in' ? '0.5' : '10'}" step="0.1"`))}
       </div>
       <div class="field-grid">
         ${field(`Exposed liner — left (${u})`, 'print.invoice.linerLeft', numI('print.invoice.linerLeft', iv.linerLeft ?? 0, 'min="0" step="0.01"'))}
@@ -435,11 +435,11 @@ export default async function settingsPage(ctx, mount) {
       <p class="field-hint">Copy the printer's <strong>Printing Preferences → Stock</strong>: same <strong>Type</strong>, <strong>Label Size</strong> and <strong>Exposed Liner Widths</strong>. For "BARCODE L" that is Die-Cut Labels, 1.5 × 1.0 in, liner 0.08 in each side.</p>
       <div class="field-grid">
         ${field('Type', 'print.barcode.stockType', `<select class="select" id="bc-stock-type">${STOCK_TYPES.map((o) => `<option value="${o.value}" ${o.value === (bc.stockType || 'die-cut') ? 'selected' : ''}>${o.label}</option>`).join('')}</select>`)}
-        ${field('Unit', 'print.barcode.unit', sel('print.barcode.unit', bc.unit, UNITS))}
+        ${field('Unit', 'print.barcode.unit', sel('print.barcode.unit', bc.unit, UNITS, 'data-rerender'))}
       </div>
       <div class="field-grid">
-        ${field(`Label width (${u})`, 'print.barcode.pageWidth', numI('print.barcode.pageWidth', bc.pageWidth, 'min="5" step="0.1"'))}
-        ${field(`Label height (${u})`, 'print.barcode.pageHeight', numI('print.barcode.pageHeight', bc.pageHeight, 'min="5" step="0.1"'))}
+        ${field(`Label width (${u})`, 'print.barcode.pageWidth', numI('print.barcode.pageWidth', bc.pageWidth, `min="${u === 'in' ? '0.2' : '5'}" step="0.1"`))}
+        ${field(`Label height (${u})`, 'print.barcode.pageHeight', numI('print.barcode.pageHeight', bc.pageHeight, `min="${u === 'in' ? '0.2' : '5'}" step="0.1"`))}
       </div>
       <div class="field-grid">
         ${field(`Exposed liner — left (${u})`, 'print.barcode.linerLeft', numI('print.barcode.linerLeft', bc.linerLeft ?? 0, 'min="0" step="0.01"'))}
