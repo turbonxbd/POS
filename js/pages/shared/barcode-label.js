@@ -96,8 +96,17 @@ function style(cfg, sz) {
   // the content, so emit an auto page height. Die-Cut / Fixed keep the exact
   // physical size. Auto is ignored under a 90/270 turn (undefined geometry).
   const auto = !!cfg.pageHeightAuto && !quarter;
-  const pageSize = auto ? `${sz.w}${sz.unit} auto` : `${sz.w}${sz.unit} ${sz.h}${sz.unit}`;
-  const pageHeightCss = auto ? `min-height: ${sz.h}${sz.unit}; height: auto;` : `height: ${sz.h}${sz.unit};`;
+
+  // labelGap - the blank die-cut gap BETWEEN labels. Baked in as extra page
+  // height (below the label) so ONE printed page == ONE physical label PITCH.
+  // Without this a browser-driven thermal printer feeds one label-height per
+  // page, ignores the gap, and every label after the first drifts down into it.
+  // Skipped for auto height (continuous roll has no gap) and 90/270 turns.
+  const gapU = auto || quarter ? 0 : Math.max(0, Number(cfg.labelGap) || 0);
+  const pitch = sz.h + gapU; // one label + the gap after it, in the merchant unit
+  const pageSize = auto ? `${sz.w}${sz.unit} auto` : `${sz.w}${sz.unit} ${pitch}${sz.unit}`;
+  const labelHeightCss = auto ? `min-height: ${sz.h}${sz.unit}; height: auto;` : `height: ${sz.h}${sz.unit};`;
+  const pageHeightCss = auto ? `min-height: ${sz.h}${sz.unit}; height: auto;` : `height: ${pitch}${sz.unit};`;
 
   // Exposed liner widths fold into the canvas's horizontal padding so the bars
   // never ride the die-cut edge (matches the driver's "Exposed Liner Widths").
@@ -106,14 +115,14 @@ function style(cfg, sz) {
   const padRight = (Number(cfg.marginRight) || 0) + lnr.right;
 
   return `<style>
-    /* Real physical label size. Never auto-converted to A4 / Letter, never swapped. */
+    /* Real physical label PITCH (label + die-cut gap). Never A4 / Letter, never swapped. */
     @page { size: ${pageSize}; margin: 0; }
 
     /* ---- shared (screen preview keeps the label upright, unrotated) ---- */
     .bc-run { width: ${sz.w}${sz.unit}; margin: 0 auto; }
     .bc-page {
       box-sizing: border-box; overflow: hidden; background: #fff; color: #000;
-      width: ${sz.w}${sz.unit}; ${pageHeightCss}
+      width: ${sz.w}${sz.unit}; ${labelHeightCss}
       margin: 0 auto;
       /* frame only - centres the label canvas on both axes */
       display: flex; align-items: center; justify-content: center;
@@ -123,7 +132,7 @@ function style(cfg, sz) {
        It is the element that gets rotated for the physical print. */
     .bc-canvas {
       box-sizing: border-box;
-      width: ${sz.w}${sz.unit}; ${pageHeightCss}
+      width: ${sz.w}${sz.unit}; ${labelHeightCss}
       padding: ${cfg.marginTop}mm ${padRight}mm ${cfg.marginBottom}mm ${padLeft}mm;
       display: flex; flex-direction: column;
       align-items: ${alignItems}; justify-content: center;
@@ -144,12 +153,14 @@ function style(cfg, sz) {
     @media print {
       html, body { background: #fff !important; margin: 0 !important; padding: 0 !important; }
       .bc-run { width: ${sz.w}${sz.unit}; margin: 0 auto !important; }
-      /* .bc-page is the exact printed label. .bc-canvas holds the content at its
-         layout dimensions (swapped for a 90/270 turn) and is rotated + clipped
-         inside the fixed page so nothing bleeds onto the next physical label. */
+      /* One printed page == one label PITCH. The label sits at the TOP of the
+         page; the die-cut gap is the blank strip below it. .bc-canvas holds the
+         content (swapped for a 90/270 turn), rotated + clipped inside the label
+         so nothing bleeds onto the next physical label. */
       .bc-page {
         width: ${sz.w}${sz.unit}; ${pageHeightCss}
         margin: 0 auto; overflow: hidden;
+        align-items: flex-start; /* label pinned to the top, gap below */
       }
       /* Break AFTER every label except the last -> exactly N pages, no trailing
          blank page. 1 barcode = 1 page, strict. */
@@ -157,7 +168,7 @@ function style(cfg, sz) {
       .bc-page:last-child { break-after: auto; page-break-after: auto; }
       .bc-canvas {
         width: ${canvasW}${sz.unit}; ${auto ? 'min-height: ' + canvasH + sz.unit + '; height: auto;' : 'height: ' + canvasH + sz.unit + ';'}
-        overflow: hidden;
+        overflow: hidden; flex: 0 0 auto;
         transform-origin: center center; ${rotCss}
       }
     }
@@ -172,7 +183,13 @@ function page(item, cfg, ctx) {
   const quarter = Number(cfg.printRotation) === 90 || Number(cfg.printRotation) === 270;
   const fitW = quarter ? sz.hMm : sz.wMm;
   const fitH = quarter ? sz.wMm : sz.hMm;
-  const pad = [cfg.marginTop, cfg.marginRight, cfg.marginBottom, cfg.marginLeft].map((n) => Number(n) || 0).join('|');
+  const lnr = linerMm(cfg);
+  const pad = [
+    Number(cfg.marginTop) || 0,
+    (Number(cfg.marginRight) || 0) + lnr.right,
+    Number(cfg.marginBottom) || 0,
+    (Number(cfg.marginLeft) || 0) + lnr.left,
+  ].join('|');
   return `<div class="bc-page"><div class="bc-canvas" data-fit-w="${fitW}" data-fit-h="${fitH}" data-fit-pad="${pad}">${renderBarcodeCard(item, cfg, ctx)}</div></div>`;
 }
 

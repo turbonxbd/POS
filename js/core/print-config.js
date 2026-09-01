@@ -78,6 +78,13 @@ export const DEFAULT_INVOICE = {
   pageHeightAuto: true, // let the page grow to fit the content (thermal rolls) - no blank pages
   unit: 'in', // mm | in
 
+  // orientation mirrors the driver's Orientation radio (see ORIENTATIONS). Set
+  // it to the SAME value the driver uses; printRotation is derived from it in
+  // invoiceConfig() (a saved printRotation still wins). 180 = printer mounted so
+  // the paper feeds out flipped.
+  orientation: 'portrait',
+  printRotation: 0,
+
   // Exposed liner widths (driver field), in the page unit. Kept off the print
   // area on BOTH sides so nothing rides the label edge. 0 for a plain roll.
   linerLeft: 0,
@@ -158,6 +165,20 @@ export const DEFAULT_BARCODE = {
   pageHeight: 1,
   unit: 'in', // mm | in
 
+  /**
+   * labelGap - the blank die-cut gap BETWEEN two labels, in the page unit.
+   *
+   * Cheap thermal printers driven from a browser feed the paper continuously:
+   * they advance exactly one printed page and do NOT re-sense the gap. If the
+   * printed page is only the label height, every label after the first drifts
+   * down into the gap (the price ends up on the next label). Baking the gap in
+   * makes ONE printed page == ONE physical label PITCH, so the run stays
+   * registered. Set it to the real gap you measure between two labels
+   * (~2-3 mm / 0.08-0.12 in is typical). Set 0 only if the driver is in
+   * die-cut / gap-sensor mode and already re-registers each label.
+   */
+  labelGap: 0.12,
+
   // Exposed liner widths (driver "Exposed Liner Widths"), in the page unit.
   // The content box is inset by these so the bars never touch the die-cut edge.
   linerLeft: 0.08,
@@ -165,22 +186,21 @@ export const DEFAULT_BARCODE = {
 
   // the barcode symbol box, millimetres
   // usable width = 38.1mm - 4mm side margins ~= 34mm; keep a quiet zone.
-  barcodeWidthMm: 32,
-  barcodeHeightMm: 11,
+  barcodeWidthMm: 30,
+  barcodeHeightMm: 9,
 
-  // outer spacing (page margins), millimetres.
-  // Left/Right = the 0.08 in (~2mm) exposed liner so the bars never ride the
-  // die-cut edge; Top/Bottom keep the stack off the label edge.
-  marginTop: 1.5,
-  marginBottom: 1.5,
+  // outer spacing (page margins), millimetres. Kept tight so the whole stack
+  // clears a 1.0 in (25.4 mm) label with room to spare.
+  marginTop: 1,
+  marginBottom: 1,
   marginLeft: 2,
   marginRight: 2,
 
   // spacing between the stacked elements, millimetres
-  gapName: 0.6,
-  gapBarcode: 0.6,
-  gapNumber: 0.5,
-  gapPrice: 0.6,
+  gapName: 0.4,
+  gapBarcode: 0.4,
+  gapNumber: 0.4,
+  gapPrice: 0.4,
 
   // alignment of the whole stack
   align: 'center', // left | center | right
@@ -261,6 +281,11 @@ export function invoiceConfig(settings = {}) {
   // pageHeightAuto, so older configs (A4 fixed, etc.) keep their behaviour.
   if (savedInv.stockType) cfg.pageHeightAuto = savedInv.stockType === 'continuous-variable';
   else cfg.stockType = cfg.pageHeightAuto ? 'continuous-variable' : 'die-cut';
+  // orientation -> printRotation (a directly saved printRotation still wins).
+  if (savedInv.orientation && savedInv.printRotation == null) cfg.printRotation = orientationToDeg(savedInv.orientation);
+  const r = ((Math.round(Number(cfg.printRotation) || 0) % 360) + 360) % 360;
+  cfg.printRotation = [0, 90, 180, 270].includes(r) ? r : 0;
+  cfg.orientation = degToOrientation(cfg.printRotation);
   return cfg;
 }
 

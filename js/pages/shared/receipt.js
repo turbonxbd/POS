@@ -108,7 +108,18 @@ function logoStyle(cfg) {
 
 function style(cfg, sz) {
   const auto = cfg.pageHeightAuto || Number(cfg.pageHeight) <= 0;
-  const pageSize = auto ? `${sz.w}${sz.unit} auto` : `${sz.w}${sz.unit} ${sz.h}${sz.unit}`;
+  // Physical print rotation (0 | 90 | 180 | 270) - mirrors the driver's
+  // Orientation. Screen preview is NEVER rotated. 180 (printer feeds flipped)
+  // works at any height; 90/270 need a fixed height and swap the @page.
+  const rot = [0, 90, 180, 270].includes(Number(cfg.printRotation)) ? Number(cfg.printRotation) : 0;
+  const quarter = (rot === 90 || rot === 270) && !auto;
+  const pageW = quarter ? `${sz.h}${sz.unit}` : `${sz.w}${sz.unit}`;
+  const pageH = auto ? 'auto' : `${quarter ? sz.w : sz.h}${sz.unit}`;
+  const pageSize = `${pageW} ${pageH}`;
+  const rotCss = rot ? `transform: rotate(${rot}deg); transform-origin: center center;` : '';
+  // 90/270 swap the box itself (in print only) to match the swapped @page, then
+  // rotate it - the rotated footprint lands back on the physical page exactly.
+  const quarterCss = quarter ? `width: ${sz.h}${sz.unit} !important; min-height: ${sz.w}${sz.unit} !important;` : '';
   // Exposed liner widths (driver field) fold into the horizontal padding.
   const padLeft = (Number(cfg.marginLeft) || 0) + Math.max(0, toMm(Number(cfg.linerLeft) || 0, cfg.unit));
   const padRight = (Number(cfg.marginRight) || 0) + Math.max(0, toMm(Number(cfg.linerRight) || 0, cfg.unit));
@@ -149,7 +160,7 @@ function style(cfg, sz) {
     .inv-doc .rc-barcode { text-align: center; margin-top: ${cfg.gapFooter}mm; }
     .inv-doc .rc-barcode svg { max-width: 100%; height: auto; }
     @media print {
-      .receipt-preview.inv-doc { box-shadow: none !important; margin: 0 auto !important; ${auto ? 'min-height:auto;' : ''} }
+      .receipt-preview.inv-doc { box-shadow: none !important; margin: 0 auto !important; ${auto ? 'min-height:auto;' : ''} ${rotCss} ${quarterCss} }
     }
   </style>`;
 }

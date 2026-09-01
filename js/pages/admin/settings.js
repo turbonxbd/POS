@@ -286,6 +286,11 @@ export default async function settingsPage(ctx, mount) {
       set('print.barcode.printRotation', orientationToDeg(e.target.value));
       refreshPreview();
     });
+    c.querySelector('#inv-orientation')?.addEventListener('change', (e) => {
+      set('print.invoice.orientation', e.target.value);
+      set('print.invoice.printRotation', orientationToDeg(e.target.value));
+      refreshPreview();
+    });
     // invoice logo upload / replace / remove (shares business.logoId)
     c.querySelector('#inv-logo-input')?.addEventListener('change', async (e) => {
       const file = e.target.files[0];
@@ -328,6 +333,8 @@ export default async function settingsPage(ctx, mount) {
         ${field(`Exposed liner — left (${u})`, 'print.invoice.linerLeft', numI('print.invoice.linerLeft', iv.linerLeft ?? 0, 'min="0" step="0.01"'))}
         ${field(`Exposed liner — right (${u})`, 'print.invoice.linerRight', numI('print.invoice.linerRight', iv.linerRight ?? 0, 'min="0" step="0.01"'))}
       </div>
+      ${field('Orientation — same as the printer driver', 'print.invoice.orientation', `<select class="select" id="inv-orientation">${ORIENTATIONS.map((o) => `<option value="${o.value}" ${o.value === (iv.orientation || 'portrait') ? 'selected' : ''}>${o.label}</option>`).join('')}</select>`)}
+      <p class="field-hint">Set this to the <strong>same Orientation</strong> as the driver. 180° = the printer is mounted so the paper comes out flipped. 90°/270° need a fixed height (Continuous&nbsp;Fixed or Die-Cut).</p>
       ${sw('print.invoice.pageHeightAuto', iv.pageHeightAuto, 'Auto height — grow to fit content (on for Continuous / Variable Length)')}
       <p class="field-hint">Print page targets <strong>${sz.w}${sz.unit} × ${iv.pageHeightAuto ? 'auto' : sz.h + sz.unit}</strong> (${sz.wMm.toFixed(1)} mm wide) at 100% / actual size. In the browser print dialog set <strong>Scale 100%</strong>, <strong>Margins: None</strong>, headers/footers off.</p>
 
@@ -437,8 +444,10 @@ export default async function settingsPage(ctx, mount) {
       <div class="field-grid">
         ${field(`Exposed liner — left (${u})`, 'print.barcode.linerLeft', numI('print.barcode.linerLeft', bc.linerLeft ?? 0, 'min="0" step="0.01"'))}
         ${field(`Exposed liner — right (${u})`, 'print.barcode.linerRight', numI('print.barcode.linerRight', bc.linerRight ?? 0, 'min="0" step="0.01"'))}
+        ${field(`Gap between labels (${u})`, 'print.barcode.labelGap', numI('print.barcode.labelGap', bc.labelGap ?? 0, 'min="0" step="0.01"'))}
       </div>
-      <p class="field-hint">Every barcode page targets <strong>${sz.w}${sz.unit} × ${sz.h}${sz.unit}</strong> (${sz.wMm.toFixed(1)} × ${sz.hMm.toFixed(1)} mm). The liner is kept clear on both sides so the bars never touch the die-cut edge.</p>
+      <p class="field-hint">Every barcode page targets <strong>${sz.w}${sz.unit} × ${sz.h}${sz.unit}</strong> (${sz.wMm.toFixed(1)} × ${sz.hMm.toFixed(1)} mm), plus a <strong>${(Number(bc.labelGap) || 0)}${u}</strong> blank gap below each label. The liner is kept clear on both sides so the bars never touch the die-cut edge.</p>
+      <p class="field-hint"><strong>Gap between labels</strong> = the blank strip you measure between two stickers. It keeps a multi-label run registered when the printer feeds continuously. Set 0 only if the driver is in Die-Cut / gap-sensor mode and re-reads every label.</p>
 
       <div class="form-section-title">Barcode size</div>
       <div class="field-grid">

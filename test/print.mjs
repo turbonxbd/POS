@@ -96,10 +96,10 @@ T('printed document centred (margin auto)', /\.bc-run\s*{[^}]*margin-left:\s*aut
 const bcMixed = buildBarcodePages([{ ...pc.SAMPLE_LABEL_ITEMS[0], qty: 3 }, { ...pc.SAMPLE_LABEL_ITEMS[1], qty: 2 }], { settings: {} });
 T('qty expands 3 + 2 => 5 pages', (bcMixed.match(/class="bc-page"/g) || []).length === 5);
 
-const bcMm = buildBarcodePages([pc.SAMPLE_LABEL_ITEMS[0]], { settings: { print: { barcode: { ...pc.DEFAULT_BARCODE, pageWidth: 50, pageHeight: 30, unit: 'mm' } } } });
+const bcMm = buildBarcodePages([pc.SAMPLE_LABEL_ITEMS[0]], { settings: { print: { barcode: { ...pc.DEFAULT_BARCODE, labelGap: 0, pageWidth: 50, pageHeight: 30, unit: 'mm' } } } });
 T('50x30mm barcode -> @page size: 50mm 30mm', /@page\s*{\s*size:\s*50mm 30mm;\s*margin:\s*0/.test(bcMm));
 T('bc-page dimensioned 50mm x 30mm', /\.bc-page\s*{[\s\S]*?width:\s*50mm;\s*height:\s*30mm/.test(bcMm));
-const bcIn = buildBarcodePages([pc.SAMPLE_LABEL_ITEMS[0]], { settings: { print: { barcode: { ...pc.DEFAULT_BARCODE, pageWidth: 2, pageHeight: 1.2, unit: 'in' } } } });
+const bcIn = buildBarcodePages([pc.SAMPLE_LABEL_ITEMS[0]], { settings: { print: { barcode: { ...pc.DEFAULT_BARCODE, labelGap: 0, pageWidth: 2, pageHeight: 1.2, unit: 'in' } } } });
 T('2x1.2in barcode -> @page size: 2in 1.2in', /@page\s*{\s*size:\s*2in 1.2in/.test(bcIn));
 
 const bcContent = pc.barcodeConfig({ print: { barcode: { showProductName: false, showPrice: false } } });
@@ -111,10 +111,10 @@ const leftCfg = pc.barcodeConfig({ print: { barcode: { align: 'left' } } });
 T('align left applied', buildSingleLabel(pc.SAMPLE_LABEL_ITEMS[0], { settings: { print: { barcode: leftCfg } } }).includes('align-items: flex-start'));
 
 /* ---------- barcode: physical print rotation (orientation fix) ---------- */
-const bcR0 = buildBarcodePages([pc.SAMPLE_LABEL_ITEMS[0]], { settings: { print: { barcode: { ...pc.DEFAULT_BARCODE, pageWidth: 50, pageHeight: 30, unit: 'mm', printRotation: 0 } } } });
+const bcR0 = buildBarcodePages([pc.SAMPLE_LABEL_ITEMS[0]], { settings: { print: { barcode: { ...pc.DEFAULT_BARCODE, labelGap: 0, pageWidth: 50, pageHeight: 30, unit: 'mm', printRotation: 0 } } } });
 T('printRotation default 0 -> no transform on the canvas', !/\.bc-canvas\s*{[^}]*transform:\s*rotate/.test(bcR0));
 T('printRotation 0 -> printed @page stays 50mm 30mm (landscape, unchanged)', /@page\s*{\s*size:\s*50mm 30mm/.test(bcR0));
-const bcR90 = buildBarcodePages([pc.SAMPLE_LABEL_ITEMS[0]], { settings: { print: { barcode: { ...pc.DEFAULT_BARCODE, pageWidth: 50, pageHeight: 30, unit: 'mm', printRotation: 90 } } } });
+const bcR90 = buildBarcodePages([pc.SAMPLE_LABEL_ITEMS[0]], { settings: { print: { barcode: { ...pc.DEFAULT_BARCODE, labelGap: 0, pageWidth: 50, pageHeight: 30, unit: 'mm', printRotation: 90 } } } });
 T('printRotation 90 -> printed @page stays the physical label size 50mm 30mm (never swapped)', /@page\s*{\s*size:\s*50mm 30mm/.test(bcR90) && !/@page\s*{\s*size:\s*30mm 50mm/.test(bcR90));
 T('rotation never leaks into the on-screen preview (transform only inside @media print)', !/transform:\s*rotate/.test(bcR90.slice(0, bcR90.indexOf('@media print'))));
 T('printRotation 90 -> canvas rotated 90deg for print', /@media print[\s\S]*\.bc-canvas\s*{[^}]*transform:\s*rotate\(90deg\)/.test(bcR90));
@@ -122,16 +122,16 @@ T('printRotation 90 -> canvas laid out at swapped dims 30mm x 50mm for print', /
 T('printRotation 90 -> printed bc-page still the physical 50mm x 30mm label', /@media print[\s\S]*\.bc-page\s*{[^}]*width:\s*50mm;\s*height:\s*30mm/.test(bcR90));
 T('printRotation 90 -> canvas clipped so nothing bleeds to the next label', /@media print[\s\S]*\.bc-canvas\s*{[^}]*overflow:\s*hidden/.test(bcR90));
 T('printRotation 90 -> still one page per barcode', (buildBarcodePages([{ ...pc.SAMPLE_LABEL_ITEMS[0], qty: 7 }], { settings: { print: { barcode: { ...pc.DEFAULT_BARCODE, printRotation: 90 } } } }).match(/class="bc-page"/g) || []).length === 7);
-const bcR270 = buildBarcodePages([pc.SAMPLE_LABEL_ITEMS[0]], { settings: { print: { barcode: { ...pc.DEFAULT_BARCODE, pageWidth: 50, pageHeight: 30, unit: 'mm', printRotation: 270 } } } });
+const bcR270 = buildBarcodePages([pc.SAMPLE_LABEL_ITEMS[0]], { settings: { print: { barcode: { ...pc.DEFAULT_BARCODE, labelGap: 0, pageWidth: 50, pageHeight: 30, unit: 'mm', printRotation: 270 } } } });
 T('printRotation 270 -> canvas rotated 270deg', /\.bc-canvas\s*{[^}]*transform:\s*rotate\(270deg\)/.test(bcR270));
-const bcR180 = buildBarcodePages([pc.SAMPLE_LABEL_ITEMS[0]], { settings: { print: { barcode: { ...pc.DEFAULT_BARCODE, pageWidth: 50, pageHeight: 30, unit: 'mm', printRotation: 180 } } } });
+const bcR180 = buildBarcodePages([pc.SAMPLE_LABEL_ITEMS[0]], { settings: { print: { barcode: { ...pc.DEFAULT_BARCODE, labelGap: 0, pageWidth: 50, pageHeight: 30, unit: 'mm', printRotation: 180 } } } });
 T('printRotation 180 -> @page NOT swapped (still 50mm 30mm), canvas rotate(180deg)', /@page\s*{\s*size:\s*50mm 30mm/.test(bcR180) && /\.bc-canvas\s*{[^}]*transform:\s*rotate\(180deg\)/.test(bcR180));
 T('printRotation garbage value falls back to 0', pc.barcodeConfig({ print: { barcode: { printRotation: 45 } } }).printRotation === 0 && pc.barcodeConfig({ print: { barcode: { printRotation: '90' } } }).printRotation === 90);
 T('each label carries data-fit-* so print can shrink overflow to the physical label', /class="bc-canvas" data-fit-w="50" data-fit-h="30" data-fit-pad="[\d.|]+"/.test(bcR0));
 T('printRotation 90 -> data-fit swapped to 30 x 50', /data-fit-w="30" data-fit-h="50"/.test(bcR90));
 
 /* ---------- barcode: exposed liner + orientation + stock type ---------- */
-const bcLiner = buildBarcodePages([pc.SAMPLE_LABEL_ITEMS[0]], { settings: { print: { barcode: { ...pc.DEFAULT_BARCODE, pageWidth: 50, pageHeight: 30, unit: 'mm', linerLeft: 3, linerRight: 3, marginLeft: 1, marginRight: 1, printRotation: 0 } } } });
+const bcLiner = buildBarcodePages([pc.SAMPLE_LABEL_ITEMS[0]], { settings: { print: { barcode: { ...pc.DEFAULT_BARCODE, labelGap: 0, pageWidth: 50, pageHeight: 30, unit: 'mm', linerLeft: 3, linerRight: 3, marginLeft: 1, marginRight: 1, printRotation: 0 } } } });
 T('exposed liner folds into the canvas horizontal padding (1 + 3 = 4mm each side)', /\.bc-canvas\s*{[^}]*padding:\s*[\d.]+mm 4mm [\d.]+mm 4mm/.test(bcLiner));
 T('default barcode = die-cut, 0.08in liner each side, portrait-180', pc.DEFAULT_BARCODE.stockType === 'die-cut' && pc.DEFAULT_BARCODE.linerLeft === 0.08 && pc.barcodeConfig({}).printRotation === 180 && pc.barcodeConfig({}).orientation === 'portrait-180');
 T('orientation -> degrees (driver-match)', pc.barcodeConfig({ print: { barcode: { orientation: 'portrait', printRotation: null } } }).printRotation === 0
@@ -139,10 +139,27 @@ T('orientation -> degrees (driver-match)', pc.barcodeConfig({ print: { barcode: 
   && pc.barcodeConfig({ print: { barcode: { orientation: 'landscape', printRotation: null } } }).printRotation === 90
   && pc.barcodeConfig({ print: { barcode: { orientation: 'landscape-180', printRotation: null } } }).printRotation === 270);
 T('a saved printRotation still wins over orientation (back-compat)', pc.barcodeConfig({ print: { barcode: { orientation: 'portrait', printRotation: 90 } } }).printRotation === 90);
-const bcVar = buildBarcodePages([pc.SAMPLE_LABEL_ITEMS[0]], { settings: { print: { barcode: { ...pc.DEFAULT_BARCODE, pageWidth: 50, pageHeight: 30, unit: 'mm', stockType: 'continuous-variable', printRotation: 0 } } } });
+const bcVar = buildBarcodePages([pc.SAMPLE_LABEL_ITEMS[0]], { settings: { print: { barcode: { ...pc.DEFAULT_BARCODE, labelGap: 0, pageWidth: 50, pageHeight: 30, unit: 'mm', stockType: 'continuous-variable', printRotation: 0 } } } });
 T('continuous-variable barcode stock -> @page auto height', /@page\s*{\s*size:\s*50mm auto/.test(bcVar));
-const bcDie = buildBarcodePages([pc.SAMPLE_LABEL_ITEMS[0]], { settings: { print: { barcode: { ...pc.DEFAULT_BARCODE, pageWidth: 50, pageHeight: 30, unit: 'mm', stockType: 'die-cut', printRotation: 0 } } } });
+const bcDie = buildBarcodePages([pc.SAMPLE_LABEL_ITEMS[0]], { settings: { print: { barcode: { ...pc.DEFAULT_BARCODE, labelGap: 0, pageWidth: 50, pageHeight: 30, unit: 'mm', stockType: 'die-cut', printRotation: 0 } } } });
 T('die-cut barcode stock -> fixed @page height', /@page\s*{\s*size:\s*50mm 30mm/.test(bcDie));
+
+/* ---------- barcode: label gap == one printed page is one label PITCH ---------- */
+const bcGap = buildBarcodePages([pc.SAMPLE_LABEL_ITEMS[0], pc.SAMPLE_LABEL_ITEMS[1]], { settings: { print: { barcode: { ...pc.DEFAULT_BARCODE, pageWidth: 50, pageHeight: 30, unit: 'mm', labelGap: 3, printRotation: 0 } } } });
+T('labelGap 3mm -> @page height is the PITCH (30 + 3 = 33mm), width unchanged', /@page\s*{\s*size:\s*50mm 33mm/.test(bcGap));
+T('labelGap -> the label itself stays 30mm (canvas), gap is blank space below', /\.bc-canvas\s*{[^}]*height:\s*30mm/.test(bcGap));
+T('labelGap -> in print the label is pinned to the top of the page', /@media print[\s\S]*\.bc-page\s*{[^}]*align-items:\s*flex-start/.test(bcGap));
+T('labelGap default is 0.12in on the barcode default', pc.DEFAULT_BARCODE.labelGap === 0.12);
+T('labelGap is ignored for a continuous-variable (auto) barcode', /@page\s*{\s*size:\s*50mm auto/.test(buildBarcodePages([pc.SAMPLE_LABEL_ITEMS[0]], { settings: { print: { barcode: { ...pc.DEFAULT_BARCODE, pageWidth: 50, pageHeight: 30, unit: 'mm', labelGap: 3, stockType: 'continuous-variable' } } } })));
+T('barcode still one .bc-page per label with a gap', (bcGap.match(/class="bc-page"/g) || []).length === 2);
+T('data-fit-pad folds in the exposed liner (right/left = 2 + 0.08in≈4.03mm)', /data-fit-pad="[\d.]+\|[\d.]+\|[\d.]+\|[\d.]+"/.test(buildBarcodePages([pc.SAMPLE_LABEL_ITEMS[0]], { settings: {} })));
+
+/* ---------- invoice: orientation (mirrors the driver) ---------- */
+const ivRot = buildReceipt(S, { settings: { print: { invoice: { ...pc.DEFAULT_INVOICE, orientation: 'portrait-180', printRotation: null, pageHeightAuto: true } } } });
+T('invoice orientation portrait-180 -> rotate(180deg) in @media print only', /@media print[\s\S]*transform:\s*rotate\(180deg\)/.test(ivRot) && !/transform:\s*rotate/.test(ivRot.slice(0, ivRot.indexOf('@media print'))));
+T('invoice orientation -> printRotation derived', pc.invoiceConfig({ print: { invoice: { orientation: 'portrait-180', printRotation: null } } }).printRotation === 180
+  && pc.invoiceConfig({ print: { invoice: { orientation: 'portrait', printRotation: null } } }).printRotation === 0);
+T('invoice 0deg -> no transform', !/transform:\s*rotate/.test(buildReceipt(S, { settings: { print: { invoice: { ...pc.DEFAULT_INVOICE } } } })));
 
 /* ---------- invoice: exposed liner ---------- */
 const ivLiner = buildReceipt(S, { settings: { print: { invoice: { ...pc.DEFAULT_INVOICE, stockType: 'continuous-fixed', pageWidth: 80, pageHeight: 150, unit: 'mm', marginLeft: 2, marginRight: 2, linerLeft: 4, linerRight: 4 } } } });
@@ -158,6 +175,7 @@ T('Print panel renders sub-tabs', !!mount.querySelector('#print-subtabs') && !!m
 T('Invoice: width/height/unit inputs', !!mount.querySelector('[data-p="print.invoice.pageWidth"]') && !!mount.querySelector('[data-p="print.invoice.pageHeight"]') && !!mount.querySelector('[data-p="print.invoice.unit"]'));
 T('Invoice: image upload + spacing inputs', !!mount.querySelector('#inv-logo-input') && !!mount.querySelector('[data-p="print.invoice.marginTop"]'));
 T('Invoice: stock type + exposed liner fields present', !!mount.querySelector('#inv-stock-type') && !!mount.querySelector('[data-p="print.invoice.linerLeft"]') && !!mount.querySelector('[data-p="print.invoice.linerRight"]'));
+T('Invoice: orientation control present', !!mount.querySelector('#inv-orientation') && mount.querySelector('#inv-orientation').tagName === 'SELECT');
 T('Invoice preview rendered a receipt', !!mount.querySelector('#preview-scale .receipt-preview'));
 T('Test print + Reset + Save buttons', !!mount.querySelector('#print-test') && !!mount.querySelector('#print-reset') && !!mount.querySelector('#print-save'));
 
@@ -168,6 +186,7 @@ T('Barcode: barcode size + align inputs', !!mount.querySelector('[data-p="print.
 T('Barcode: orientation control present', !!mount.querySelector('#bc-orientation') && mount.querySelector('#bc-orientation').tagName === 'SELECT');
 T('Barcode: stock type control present', !!mount.querySelector('#bc-stock-type'));
 T('Barcode: exposed liner fields present', !!mount.querySelector('[data-p="print.barcode.linerLeft"]') && !!mount.querySelector('[data-p="print.barcode.linerRight"]'));
+T('Barcode: label-gap field present', !!mount.querySelector('[data-p="print.barcode.labelGap"]'));
 T('Barcode preview rendered one bc-page', !!mount.querySelector('#preview-scale .bc-page'));
 T('Barcode preview meta says 1 barcode = 1 page', /1 barcode = 1 page/.test(mount.querySelector('#preview-meta').textContent));
 
