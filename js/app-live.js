@@ -56,6 +56,20 @@ const FEATURES = [
   ['database', 'Your data, backed up', 'Self-hosted on your own server with scheduled backups.'],
 ];
 
+const FAQ = [
+  ['Do I need to install anything?', 'No. POS TXbd runs in any modern browser on a phone, tablet, laptop or desktop. A USB barcode scanner plugs in and works with no setup.'],
+  ['Where is my data stored?', 'On your own hosting account with your own MySQL database — no third-party cloud. Scheduled backups keep a rolling history, and you can export a full snapshot at any time.'],
+  ['Can I run more than one shop?', 'Yes. One account can run several branches, each with its own stock, cashiers and register reconciliation, while reports roll up across the whole business.'],
+  ['Does it work if the internet drops?', 'The cashier keeps taking sales offline and queues them locally; they sync automatically — with no duplicates — when the connection returns.'],
+  ['How do I pay?', 'Pick a plan and pay the setup fee plus a monthly charge by bKash, Nagad, bank transfer or card. Extra branches are a small add-on.'],
+];
+
+const TESTIMONIALS = [
+  ['We moved three branches onto it in a weekend. The daily close finally matches the drawer.', 'Rehana, cosmetics retailer, Dhaka'],
+  ['Barcode in, invoice out, stock goes down by itself. My cashiers picked it up in an afternoon.', 'Imran, mobile & accessories, Chattogram'],
+  ['The one report I open every morning shows sales, profit and low stock together. That is the whole job.', 'Farzana, pharmacy owner, Sylhet'],
+];
+
 const root = document.getElementById('app-root');
 
 (async () => {
@@ -93,6 +107,7 @@ function render(plans) {
       <a href="#how">How it works</a>
       <a href="#features">Features</a>
       <a href="#pricing">Pricing</a>
+      <a href="#faq">FAQ</a>
       <a class="btn btn--ghost btn--sm" href="portal.html">Merchant sign-in</a>
       <button class="btn btn--primary btn--sm" id="cta-top">Get started</button>
     </nav>
@@ -153,6 +168,26 @@ function render(plans) {
       Need something custom? <a href="${waLink('Hi, I need a custom POS plan.')}" target="_blank" rel="noopener">Message us</a>.</p>
   </section>
 
+  <section class="live-sec live-sec--tint" id="stories">
+    <h2>Shopkeepers already running on it</h2>
+    <div class="live-quotes">
+      ${TESTIMONIALS.map(([q, who]) => `<figure class="live-quote">
+        <blockquote>&ldquo;${escapeHtml(q)}&rdquo;</blockquote>
+        <figcaption>${escapeHtml(who)}</figcaption>
+      </figure>`).join('')}
+    </div>
+  </section>
+
+  <section class="live-sec" id="faq">
+    <h2>Questions</h2>
+    <div class="live-faq">
+      ${FAQ.map(([q, a]) => `<details class="live-faq__item">
+        <summary>${escapeHtml(q)}</summary>
+        <p>${escapeHtml(a)}</p>
+      </details>`).join('')}
+    </div>
+  </section>
+
   <section class="live-sec live-sec--cta" id="contact">
     <div class="live-cta">
       <h2>Ready to start selling on ${escapeHtml(NAME)}?</h2>
@@ -167,7 +202,7 @@ function render(plans) {
 
   <footer class="live-foot">
     <span>${escapeHtml(NAME)} · Point of Sale</span>
-    <span><a href="portal.html">Merchant sign-in</a> · <a href="${waLink('Hi, I have a question about POS TXbd.')}" target="_blank" rel="noopener">Support</a></span>
+    <span><a href="portal.html">Merchant sign-in</a> · <a href="terms.html">Terms</a> · <a href="privacy.html">Privacy</a> · <a href="${waLink('Hi, I have a question about POS TXbd.')}" target="_blank" rel="noopener">Support</a></span>
     <span>&copy; ${new Date().getFullYear()} ${escapeHtml(NAME)}</span>
   </footer>`;
 

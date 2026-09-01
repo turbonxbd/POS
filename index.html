@@ -8,9 +8,46 @@
   <link rel="icon" href="assets/logos/favicon.svg">
   <link rel="manifest" href="manifest.webmanifest">
   <meta name="theme-color" content="#5145d8">
+  <link rel="canonical" href="https://turbonxbd.github.io/POS/">
   <meta property="og:title" content="POS TXbd — Point of Sale for retail">
   <meta property="og:description" content="Barcode checkout, branch-wise stock, invoices, reports. Self-hosted POS for Bangladesh retail.">
   <meta property="og:type" content="website">
+  <meta property="og:url" content="https://turbonxbd.github.io/POS/">
+  <meta property="og:site_name" content="POS TXbd">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="POS TXbd — Point of Sale for retail">
+  <meta name="twitter:description" content="Barcode checkout, branch-wise stock, invoices, reports. Self-hosted POS for Bangladesh retail.">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "name": "POS TXbd",
+        "url": "https://turbonxbd.github.io/POS/",
+        "description": "Self-hosted multi-branch point-of-sale software for retail businesses in Bangladesh."
+      },
+      {
+        "@type": "SoftwareApplication",
+        "name": "POS TXbd",
+        "applicationCategory": "BusinessApplication",
+        "operatingSystem": "Web",
+        "description": "A complete point-of-sale for Bangladesh retail: barcode checkout, branch-wise inventory, invoices, exchange & return, staff roles and a real-time dashboard.",
+        "offers": { "@type": "Offer", "priceCurrency": "BDT" }
+      },
+      {
+        "@type": "FAQPage",
+        "mainEntity": [
+          { "@type": "Question", "name": "Do I need to install anything?", "acceptedAnswer": { "@type": "Answer", "text": "No. POS TXbd runs in any modern browser on a phone, tablet, laptop or desktop. A USB barcode scanner plugs in and works with no setup." } },
+          { "@type": "Question", "name": "Where is my data stored?", "acceptedAnswer": { "@type": "Answer", "text": "On your own hosting account with your own MySQL database — no third-party cloud. Scheduled backups keep a rolling history, and you can export a full snapshot at any time." } },
+          { "@type": "Question", "name": "Can I run more than one shop?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. One account can run several branches, each with its own stock, cashiers and register reconciliation, while reports roll up across the whole business." } },
+          { "@type": "Question", "name": "Does it work if the internet drops?", "acceptedAnswer": { "@type": "Answer", "text": "The cashier keeps taking sales offline and queues them locally; they sync automatically — with no duplicates — when the connection returns." } },
+          { "@type": "Question", "name": "How do I pay?", "acceptedAnswer": { "@type": "Answer", "text": "Pick a plan and pay the setup fee plus a monthly charge by bKash, Nagad, bank transfer or card. Extra branches are a small add-on." } }
+        ]
+      }
+    ]
+  }
+  </script>
   <link rel="stylesheet" href="css/reset.css">
   <link rel="stylesheet" href="css/tokens.css">
   <link rel="stylesheet" href="css/base.css">

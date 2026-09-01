@@ -155,6 +155,8 @@ const R = '../';
   T('live pricing lists plans from /plans with setup + monthly', root.querySelectorAll('.live-plan').length >= 3 && /setup/i.test(root.querySelector('.live-plan__terms')?.textContent || ''));
   T('live WhatsApp links use a wa.me number', /wa\.me\/\d/.test(root.innerHTML));
   T('live support chat widget mounted', !!win.document.getElementById('live-chat'));
+  T('live page has an FAQ + testimonials section', root.querySelectorAll('#faq .live-faq__item').length >= 3 && !!root.querySelector('#stories .live-quote'));
+  T('live footer links to Terms + Privacy', /href="terms\.html"/.test(root.innerHTML) && /href="privacy\.html"/.test(root.innerHTML));
   const realErrs = errs.filter((e) => !e.includes('Not implemented') && !e.includes('[chart]') && !e.includes('MutationObserver'));
   T('live: no console errors during boot', realErrs.length === 0, realErrs[0] || '');
   console.error = orig;

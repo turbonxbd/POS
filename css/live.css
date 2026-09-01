@@ -170,3 +170,15 @@
 @media (max-width: 480px) {
   .live-chat { right: 12px; bottom: 12px; }
 }
+
+/* testimonials + FAQ */
+.live-quotes { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px; margin-top: 8px; }
+.live-quote { margin: 0; padding: 20px; border-radius: var(--radius-lg); background: var(--surface); border: 1px solid var(--border-subtle); }
+.live-quote blockquote { margin: 0 0 10px; font-size: 1.02rem; line-height: 1.55; }
+.live-quote figcaption { color: var(--text-muted); font-size: .86rem; }
+.live-faq { max-width: 760px; margin: 8px auto 0; }
+.live-faq__item { border-bottom: 1px solid var(--border-subtle); padding: 4px 0; }
+.live-faq__item summary { cursor: pointer; padding: 14px 4px; font-weight: 600; list-style: none; display: flex; justify-content: space-between; gap: 12px; }
+.live-faq__item summary::after { content: '+'; color: var(--text-muted); font-weight: 400; }
+.live-faq__item[open] summary::after { content: '\2013'; }
+.live-faq__item p { margin: 0 4px 14px; color: var(--text-muted); line-height: 1.6; }
