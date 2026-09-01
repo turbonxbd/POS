@@ -120,6 +120,21 @@ const R = '../';
     T('POS has a mobile cart button + bottom-sheet backdrop', !!root.querySelector('.js-cart-fab') && !!root.querySelector('.js-sheet-backdrop'));
     T('POS cart grabber toggle wired', typeof root.querySelector('.pos-cart__head') !== 'undefined');
   }
+  // offline sales-queue indicator surfaces when something is queued
+  const { default: syncQueue } = await import(R + 'js/core/sync-queue.js');
+  syncQueue.enqueue({ path: '/sales', body: { idempotencyKey: 'boot-test-1' }, kind: 'sale' });
+  await sleep(60);
+  const syncBtn = root.querySelector('.js-sync-status');
+  T('cashier: offline-queue indicator shows a queued sale', !!syncBtn && !syncBtn.hidden, syncBtn ? 'hidden' : 'missing');
+  if (syncBtn) {
+    syncBtn.click();
+    await sleep(60);
+    T('cashier: sync panel lists the queued item', /boot-test-1|sale/i.test(win.document.querySelector('.modal')?.textContent || ''));
+    win.document.querySelector('.js-modal-close')?.click();
+  }
+  syncQueue.clearResolved();
+  try { win.localStorage.removeItem('afia_sync_queue_v1'); } catch { /* key name may differ */ }
+
   const realErrs = errs.filter((e) => !e.includes('Not implemented') && !e.includes('[chart]') && !e.includes('camera'));
   T('cashier: no console errors during boot', realErrs.length === 0, realErrs[0] || '');
   console.error = orig;

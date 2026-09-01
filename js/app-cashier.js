@@ -24,6 +24,7 @@ import { renderPOS } from './pages/cashier/pos.js';
 import { openExchangeReturn } from './pages/cashier/exchange-return.js';
 import { langSwitchHTML, wireLangSwitch } from './components/lang-switch.js';
 import { buildReceipt } from './pages/shared/receipt.js';
+import { mountSyncStatus } from './pages/cashier/sync-status.js';
 import { xReport, zReport } from './pages/shared/register-report.js';
 
 const root = document.getElementById('pos-root');
@@ -130,6 +131,7 @@ function renderTerminal() {
         ${langSwitchHTML()}
         ${can('sales.refund') ? `<button class="btn btn--ghost btn--sm js-return-btn">${icon('undo', { size: 15 })} <span class="js-hide-sm">Exchange / Return</span></button>` : ''}
         <button class="btn btn--ghost btn--sm js-txn-btn">${icon('history', { size: 15 })} <span class="js-hide-sm">Transactions</span></button>
+        <span class="js-sync-mount" style="display:inline-flex"></span>
         <button class="topbar__icon-btn js-theme" aria-label="Theme">${icon('moon')}</button>
         <button class="user-chip js-user">
           <span class="avatar avatar--sm">${escapeHtml(initials(user.name))}</span>
@@ -145,6 +147,7 @@ function renderTerminal() {
     </div>`;
   const topbar = root.querySelector('#pos-topbar');
   wireLangSwitch(topbar);
+  mountSyncStatus(topbar.querySelector('.js-sync-mount'));
   const mount = root.querySelector('#pos');
 
   topbar.querySelector('.js-theme').addEventListener('click', (e) => {
