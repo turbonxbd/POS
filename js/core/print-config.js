@@ -44,16 +44,23 @@ export const STOCK_TYPES = [
 ];
 
 /**
- * Orientation - mirrors the driver's Orientation radio group. The SAME value
- * the driver uses must be set here: our CSS pre-rotates the content by the same
- * angle, which cancels the driver's rotation so the label prints upright.
- *   portrait 0deg · landscape 90deg · portrait-180 180deg · landscape-180 270deg
+ * Orientation - same names, same order, same meaning as the label/receipt
+ * printer driver's Orientation radio, so "set it the same on both sides".
+ *
+ * The printer's convention (GP-3120TUC and most direct-thermal heads): the
+ * media feeds pre-flipped, so *"Portrait 180" is the UPRIGHT result* and plain
+ * "Portrait" comes out upside down. We match that exactly:
+ *   portrait-180  -> 0deg    send the page upright  -> prints upright  (default)
+ *   portrait      -> 180deg  flip the page          -> prints upside down
+ *   landscape-180 -> 90deg
+ *   landscape     -> 270deg
+ * Screen preview is never rotated - only the physical @media print output.
  */
 export const ORIENTATIONS = [
-  { value: 'portrait', label: 'Portrait', deg: 0 },
-  { value: 'landscape', label: 'Landscape', deg: 90 },
-  { value: 'portrait-180', label: 'Portrait 180°', deg: 180 },
-  { value: 'landscape-180', label: 'Landscape 180°', deg: 270 },
+  { value: 'portrait', label: 'Portrait', deg: 180 },
+  { value: 'landscape', label: 'Landscape', deg: 270 },
+  { value: 'portrait-180', label: 'Portrait 180°', deg: 0 },
+  { value: 'landscape-180', label: 'Landscape 180°', deg: 90 },
 ];
 
 export function orientationToDeg(v) {
@@ -78,11 +85,9 @@ export const DEFAULT_INVOICE = {
   pageHeightAuto: true, // let the page grow to fit the content (thermal rolls) - no blank pages
   unit: 'in', // mm | in
 
-  // orientation mirrors the driver's Orientation radio (see ORIENTATIONS). Set
-  // it to the SAME value the driver uses; printRotation is derived from it in
-  // invoiceConfig() (a saved printRotation still wins). 180 = printer mounted so
-  // the paper feeds out flipped.
-  orientation: 'portrait',
+  // Orientation - "Portrait 180°" is the upright result (printer convention,
+  // see ORIENTATIONS). Default to it so the receipt prints the right way up.
+  orientation: 'portrait-180',
   printRotation: 0,
 
   // Exposed liner widths (driver field), in the page unit. Kept off the print
@@ -206,25 +211,13 @@ export const DEFAULT_BARCODE = {
   align: 'center', // left | center | right
 
   /**
-   * printRotation - degrees to rotate EACH label for the physical print only
-   * (0 | 90 | 180 | 270). The on-screen preview is never rotated.
-   *
-   * Use this when the label printer / driver sends the barcode out turned the
-   * wrong way (e.g. a landscape 50x30 label coming out bottom-to-top because the
-   * driver's paper orientation is portrait). 90 or 270 also swap the emitted
-   * @page to portrait so the printer stops re-rotating the page itself.
+   * orientation - same names/meaning as the printer driver's Orientation radio
+   * (see ORIENTATIONS). "Portrait 180°" is the upright result (printer
+   * convention); default to it. printRotation is the resolved angle (0 for
+   * portrait-180) and only rotates the physical @media print output, never the
+   * on-screen preview.
    */
-  /**
-   * orientation / printRotation - rotate EACH label for the physical print
-   * only (screen preview is never rotated).
-   *
-   * Use rotation in ONE place, not two. The printer driver's own "Orientation:
-   * Portrait 180" already flips the page; if you ALSO set 180 here the two
-   * turns fight (the label comes out reading bottom-to-top). So the default is
-   * 0 - let the driver do the flip. Only set this to 180 if you instead put the
-   * driver back to plain Portrait and want the flip done here.
-   */
-  orientation: 'portrait',
+  orientation: 'portrait-180',
   printRotation: 0,
 
   /**

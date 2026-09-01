@@ -333,8 +333,8 @@ export default async function settingsPage(ctx, mount) {
         ${field(`Exposed liner — left (${u})`, 'print.invoice.linerLeft', numI('print.invoice.linerLeft', iv.linerLeft ?? 0, 'min="0" step="0.01"'))}
         ${field(`Exposed liner — right (${u})`, 'print.invoice.linerRight', numI('print.invoice.linerRight', iv.linerRight ?? 0, 'min="0" step="0.01"'))}
       </div>
-      ${field('Orientation', 'print.invoice.orientation', `<select class="select" id="inv-orientation">${ORIENTATIONS.map((o) => `<option value="${o.value}" ${o.value === (iv.orientation || 'portrait') ? 'selected' : ''}>${o.label}</option>`).join('')}</select>`)}
-      <p class="field-hint"><strong>Rotate in one place only.</strong> If the printer driver is set to "Portrait 180", leave this on <strong>Portrait</strong>. If the driver is plain Portrait and the receipt prints upside down, set this to <strong>Portrait 180°</strong>. 180 in both = upside down. 90°/270° need a fixed height (Continuous&nbsp;Fixed or Die-Cut).</p>
+      ${field('Orientation', 'print.invoice.orientation', `<select class="select" id="inv-orientation">${ORIENTATIONS.map((o) => `<option value="${o.value}" ${o.value === (iv.orientation || 'portrait-180') ? 'selected' : ''}>${o.label}</option>`).join('')}</select>`)}
+      <p class="field-hint">Set this the <strong>same as the printer driver's Orientation</strong>. <strong>Portrait 180°</strong> prints the right way up — that is the normal setting for a thermal printer, and the default here. Plain <strong>Portrait</strong> prints upside down (the printer's own convention). 90°/270° need a fixed height (Continuous&nbsp;Fixed or Die-Cut).</p>
       ${sw('print.invoice.pageHeightAuto', iv.pageHeightAuto, 'Auto height — grow to fit content (on for Continuous / Variable Length)')}
       <p class="field-hint">Print page targets <strong>${sz.w}${sz.unit} × ${iv.pageHeightAuto ? 'auto' : sz.h + sz.unit}</strong> (${sz.wMm.toFixed(1)} mm wide) at 100% / actual size. In the browser print dialog set <strong>Scale 100%</strong>, <strong>Margins: None</strong>, headers/footers off.</p>
 
@@ -500,8 +500,8 @@ export default async function settingsPage(ctx, mount) {
 
       <div class="form-section-title">Position</div>
       ${field('Alignment', 'print.barcode.align', sel('print.barcode.align', bc.align, [{ value: 'left', label: 'Left' }, { value: 'center', label: 'Center' }, { value: 'right', label: 'Right' }]))}
-      ${field('Orientation', 'print.barcode.orientation', `<select class="select" id="bc-orientation">${ORIENTATIONS.map((o) => `<option value="${o.value}" ${o.value === (bc.orientation || 'portrait') ? 'selected' : ''}>${o.label}</option>`).join('')}</select>`)}
-      <p class="field-hint"><strong>Rotate in one place only — not two.</strong> If the printer driver's own Orientation is set to "Portrait 180", leave this on <strong>Portrait</strong> (the driver does the flip). If the driver is on plain Portrait and the label prints upside down, set this to <strong>Portrait 180°</strong> instead. Setting 180 in both makes the label read bottom-to-top. Affects the physical print only, never this preview.</p>`;
+      ${field('Orientation', 'print.barcode.orientation', `<select class="select" id="bc-orientation">${ORIENTATIONS.map((o) => `<option value="${o.value}" ${o.value === (bc.orientation || 'portrait-180') ? 'selected' : ''}>${o.label}</option>`).join('')}</select>`)}
+      <p class="field-hint">Set this the <strong>same as the printer driver's Orientation</strong>. <strong>Portrait 180°</strong> prints the label the right way up (top-to-bottom) — the normal setting, and the default. Plain <strong>Portrait</strong> prints it upside down (the printer's own convention). Affects the physical print only, never this preview.</p>`;
   }
 
   /* ---- preview ---- */

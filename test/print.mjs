@@ -133,11 +133,11 @@ T('printRotation 90 -> data-fit swapped to 30 x 50', /data-fit-w="30" data-fit-h
 /* ---------- barcode: exposed liner + orientation + stock type ---------- */
 const bcLiner = buildBarcodePages([pc.SAMPLE_LABEL_ITEMS[0]], { settings: { print: { barcode: { ...pc.DEFAULT_BARCODE, labelGap: 0, pageWidth: 50, pageHeight: 30, unit: 'mm', linerLeft: 3, linerRight: 3, marginLeft: 1, marginRight: 1, printRotation: 0 } } } });
 T('exposed liner folds into the canvas horizontal padding (1 + 3 = 4mm each side)', /\.bc-canvas\s*{[^}]*padding:\s*[\d.]+mm 4mm [\d.]+mm 4mm/.test(bcLiner));
-T('default barcode = die-cut, 0.08in liner each side, NO rotation (driver does the flip)', pc.DEFAULT_BARCODE.stockType === 'die-cut' && pc.DEFAULT_BARCODE.linerLeft === 0.08 && pc.barcodeConfig({}).printRotation === 0 && pc.barcodeConfig({}).orientation === 'portrait');
-T('orientation -> degrees (driver-match)', pc.barcodeConfig({ print: { barcode: { orientation: 'portrait', printRotation: null } } }).printRotation === 0
-  && pc.barcodeConfig({ print: { barcode: { orientation: 'portrait-180', printRotation: null } } }).printRotation === 180
-  && pc.barcodeConfig({ print: { barcode: { orientation: 'landscape', printRotation: null } } }).printRotation === 90
-  && pc.barcodeConfig({ print: { barcode: { orientation: 'landscape-180', printRotation: null } } }).printRotation === 270);
+T('default barcode = die-cut, 0.08in liner, "Portrait 180" = upright (printRotation 0)', pc.DEFAULT_BARCODE.stockType === 'die-cut' && pc.DEFAULT_BARCODE.linerLeft === 0.08 && pc.barcodeConfig({}).printRotation === 0 && pc.barcodeConfig({}).orientation === 'portrait-180');
+T('orientation matches the printer: "Portrait 180" upright (0), plain "Portrait" flipped (180)', pc.barcodeConfig({ print: { barcode: { orientation: 'portrait-180', printRotation: null } } }).printRotation === 0
+  && pc.barcodeConfig({ print: { barcode: { orientation: 'portrait', printRotation: null } } }).printRotation === 180
+  && pc.barcodeConfig({ print: { barcode: { orientation: 'landscape-180', printRotation: null } } }).printRotation === 90
+  && pc.barcodeConfig({ print: { barcode: { orientation: 'landscape', printRotation: null } } }).printRotation === 270);
 T('a saved printRotation still wins over orientation (back-compat)', pc.barcodeConfig({ print: { barcode: { orientation: 'portrait', printRotation: 90 } } }).printRotation === 90);
 const bcVar = buildBarcodePages([pc.SAMPLE_LABEL_ITEMS[0]], { settings: { print: { barcode: { ...pc.DEFAULT_BARCODE, labelGap: 0, pageWidth: 50, pageHeight: 30, unit: 'mm', stockType: 'continuous-variable', printRotation: 0 } } } });
 T('continuous-variable barcode stock -> @page auto height', /@page\s*{\s*size:\s*50mm auto/.test(bcVar));
@@ -154,12 +154,17 @@ T('labelGap is ignored for a continuous-variable (auto) barcode', /@page\s*{\s*s
 T('barcode still one .bc-page per label with a gap', (bcGap.match(/class="bc-page"/g) || []).length === 2);
 T('data-fit-pad folds in the exposed liner (right/left = 2 + 0.08in≈4.03mm)', /data-fit-pad="[\d.]+\|[\d.]+\|[\d.]+\|[\d.]+"/.test(buildBarcodePages([pc.SAMPLE_LABEL_ITEMS[0]], { settings: {} })));
 
-/* ---------- invoice: orientation (mirrors the driver) ---------- */
-const ivRot = buildReceipt(S, { settings: { print: { invoice: { ...pc.DEFAULT_INVOICE, orientation: 'portrait-180', printRotation: null, pageHeightAuto: true } } } });
-T('invoice orientation portrait-180 -> rotate(180deg) in @media print only', /@media print[\s\S]*transform:\s*rotate\(180deg\)/.test(ivRot) && !/transform:\s*rotate/.test(ivRot.slice(0, ivRot.indexOf('@media print'))));
-T('invoice orientation -> printRotation derived', pc.invoiceConfig({ print: { invoice: { orientation: 'portrait-180', printRotation: null } } }).printRotation === 180
-  && pc.invoiceConfig({ print: { invoice: { orientation: 'portrait', printRotation: null } } }).printRotation === 0);
-T('invoice 0deg -> no transform', !/transform:\s*rotate/.test(buildReceipt(S, { settings: { print: { invoice: { ...pc.DEFAULT_INVOICE } } } })));
+/* ---------- invoice: orientation matches the printer convention ---------- */
+// "Portrait 180" = upright = NO rotation (this is the default, and what the printer calls straight)
+const ivUp = buildReceipt(S, { settings: { print: { invoice: { ...pc.DEFAULT_INVOICE, orientation: 'portrait-180', printRotation: null, pageHeightAuto: true } } } });
+T('invoice "Portrait 180" -> upright, no transform', !/transform:\s*rotate/.test(ivUp));
+// plain "Portrait" = the printer prints it upside down -> we flip 180 to match
+const ivFlip = buildReceipt(S, { settings: { print: { invoice: { ...pc.DEFAULT_INVOICE, orientation: 'portrait', printRotation: null, pageHeightAuto: true } } } });
+T('invoice plain "Portrait" -> rotate(180deg) in @media print only', /@media print[\s\S]*transform:\s*rotate\(180deg\)/.test(ivFlip) && !/transform:\s*rotate/.test(ivFlip.slice(0, ivFlip.indexOf('@media print'))));
+T('invoice orientation -> printRotation matches the printer', pc.invoiceConfig({ print: { invoice: { orientation: 'portrait-180', printRotation: null } } }).printRotation === 0
+  && pc.invoiceConfig({ print: { invoice: { orientation: 'portrait', printRotation: null } } }).printRotation === 180);
+T('invoice default is "Portrait 180" (upright)', pc.invoiceConfig({}).orientation === 'portrait-180' && pc.invoiceConfig({}).printRotation === 0);
+T('invoice default -> no transform', !/transform:\s*rotate/.test(buildReceipt(S, { settings: { print: { invoice: { ...pc.DEFAULT_INVOICE } } } })));
 
 /* ---------- invoice: exposed liner ---------- */
 const ivLiner = buildReceipt(S, { settings: { print: { invoice: { ...pc.DEFAULT_INVOICE, stockType: 'continuous-fixed', pageWidth: 80, pageHeight: 150, unit: 'mm', marginLeft: 2, marginRight: 2, linerLeft: 4, linerRight: 4 } } } });
