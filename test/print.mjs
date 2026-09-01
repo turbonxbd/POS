@@ -47,7 +47,7 @@ T('resolveSize keeps unit + converts', rs.unit === 'in' && rs.w === 3 && Math.ab
 
 /* ---------- invoice config: defaults + legacy migration ---------- */
 const iv = pc.invoiceConfig({});
-T('invoice default 80mm wide', iv.pageWidth === 80 && iv.unit === 'mm');
+T('invoice default 3in wide (GP-3120TUC POS stock)', iv.pageWidth === 3 && iv.unit === 'in' && iv.pageHeightAuto === true);
 const ivLegacy = pc.invoiceConfig({ pos: { receiptSize: 'a4' }, receipt: { header: 'My Shop', footer: 'ধন্যবাদ', showBarcode: false } });
 T('legacy a4 -> 210x297mm', ivLegacy.pageWidth === 210 && ivLegacy.pageHeight === 297);
 T('legacy receipt.header -> headerText', ivLegacy.headerText === 'My Shop');
@@ -111,10 +111,10 @@ const leftCfg = pc.barcodeConfig({ print: { barcode: { align: 'left' } } });
 T('align left applied', buildSingleLabel(pc.SAMPLE_LABEL_ITEMS[0], { settings: { print: { barcode: leftCfg } } }).includes('align-items: flex-start'));
 
 /* ---------- barcode: physical print rotation (orientation fix) ---------- */
-const bcR0 = buildBarcodePages([pc.SAMPLE_LABEL_ITEMS[0]], { settings: { print: { barcode: { ...pc.DEFAULT_BARCODE, pageWidth: 50, pageHeight: 30 } } } });
+const bcR0 = buildBarcodePages([pc.SAMPLE_LABEL_ITEMS[0]], { settings: { print: { barcode: { ...pc.DEFAULT_BARCODE, pageWidth: 50, pageHeight: 30, unit: 'mm', printRotation: 0 } } } });
 T('printRotation default 0 -> no transform on the canvas', !/\.bc-canvas\s*{[^}]*transform:\s*rotate/.test(bcR0));
 T('printRotation 0 -> printed @page stays 50mm 30mm (landscape, unchanged)', /@page\s*{\s*size:\s*50mm 30mm/.test(bcR0));
-const bcR90 = buildBarcodePages([pc.SAMPLE_LABEL_ITEMS[0]], { settings: { print: { barcode: { ...pc.DEFAULT_BARCODE, pageWidth: 50, pageHeight: 30, printRotation: 90 } } } });
+const bcR90 = buildBarcodePages([pc.SAMPLE_LABEL_ITEMS[0]], { settings: { print: { barcode: { ...pc.DEFAULT_BARCODE, pageWidth: 50, pageHeight: 30, unit: 'mm', printRotation: 90 } } } });
 T('printRotation 90 -> printed @page stays the physical label size 50mm 30mm (never swapped)', /@page\s*{\s*size:\s*50mm 30mm/.test(bcR90) && !/@page\s*{\s*size:\s*30mm 50mm/.test(bcR90));
 T('rotation never leaks into the on-screen preview (transform only inside @media print)', !/transform:\s*rotate/.test(bcR90.slice(0, bcR90.indexOf('@media print'))));
 T('printRotation 90 -> canvas rotated 90deg for print', /@media print[\s\S]*\.bc-canvas\s*{[^}]*transform:\s*rotate\(90deg\)/.test(bcR90));
@@ -122,9 +122,9 @@ T('printRotation 90 -> canvas laid out at swapped dims 30mm x 50mm for print', /
 T('printRotation 90 -> printed bc-page still the physical 50mm x 30mm label', /@media print[\s\S]*\.bc-page\s*{[^}]*width:\s*50mm;\s*height:\s*30mm/.test(bcR90));
 T('printRotation 90 -> canvas clipped so nothing bleeds to the next label', /@media print[\s\S]*\.bc-canvas\s*{[^}]*overflow:\s*hidden/.test(bcR90));
 T('printRotation 90 -> still one page per barcode', (buildBarcodePages([{ ...pc.SAMPLE_LABEL_ITEMS[0], qty: 7 }], { settings: { print: { barcode: { ...pc.DEFAULT_BARCODE, printRotation: 90 } } } }).match(/class="bc-page"/g) || []).length === 7);
-const bcR270 = buildBarcodePages([pc.SAMPLE_LABEL_ITEMS[0]], { settings: { print: { barcode: { ...pc.DEFAULT_BARCODE, printRotation: 270 } } } });
+const bcR270 = buildBarcodePages([pc.SAMPLE_LABEL_ITEMS[0]], { settings: { print: { barcode: { ...pc.DEFAULT_BARCODE, pageWidth: 50, pageHeight: 30, unit: 'mm', printRotation: 270 } } } });
 T('printRotation 270 -> canvas rotated 270deg', /\.bc-canvas\s*{[^}]*transform:\s*rotate\(270deg\)/.test(bcR270));
-const bcR180 = buildBarcodePages([pc.SAMPLE_LABEL_ITEMS[0]], { settings: { print: { barcode: { ...pc.DEFAULT_BARCODE, pageWidth: 50, pageHeight: 30, printRotation: 180 } } } });
+const bcR180 = buildBarcodePages([pc.SAMPLE_LABEL_ITEMS[0]], { settings: { print: { barcode: { ...pc.DEFAULT_BARCODE, pageWidth: 50, pageHeight: 30, unit: 'mm', printRotation: 180 } } } });
 T('printRotation 180 -> @page NOT swapped (still 50mm 30mm), canvas rotate(180deg)', /@page\s*{\s*size:\s*50mm 30mm/.test(bcR180) && /\.bc-canvas\s*{[^}]*transform:\s*rotate\(180deg\)/.test(bcR180));
 T('printRotation garbage value falls back to 0', pc.barcodeConfig({ print: { barcode: { printRotation: 45 } } }).printRotation === 0 && pc.barcodeConfig({ print: { barcode: { printRotation: '90' } } }).printRotation === 90);
 T('each label carries data-fit-* so print can shrink overflow to the physical label', /class="bc-canvas" data-fit-w="50" data-fit-h="30" data-fit-pad="[\d.|]+"/.test(bcR0));

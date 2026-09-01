@@ -35,16 +35,22 @@ export const UNITS = [
 
 export const DEFAULT_INVOICE = {
   // A. custom physical page size (the actual print page)
-  pageWidth: 80,
-  pageHeight: 150,
+  //
+  // Matched to the GP-3120TUC "POS" stock: Continuous (Variable Length),
+  // 3.00 in max width, 7.00 in max length. pageHeightAuto keeps the roll
+  // growing to the content so there is never a short-cut or a blank tail.
+  pageWidth: 3,
+  pageHeight: 7,
   pageHeightAuto: true, // let the page grow to fit the content (thermal rolls) - no blank pages
-  unit: 'mm', // mm | in
+  unit: 'in', // mm | in
 
-  // B. outer spacing (page margins), millimetres
-  marginTop: 4,
-  marginBottom: 6,
-  marginLeft: 4,
-  marginRight: 4,
+  // B. outer spacing (page margins), millimetres.
+  // The driver already reserves its own 0.5 in top/bottom feed area on the
+  // POS stock, so keep these small or the receipt wastes paper.
+  marginTop: 3,
+  marginBottom: 5,
+  marginLeft: 3,
+  marginRight: 3,
 
   // spacing between the invoice sections, millimetres
   gapHeader: 2, // after the business header
@@ -55,7 +61,7 @@ export const DEFAULT_INVOICE = {
   gapFooter: 3, // above the footer
 
   // type
-  fontSize: 12, // px
+  fontSize: 13, // px
   lineHeight: 1.4,
 
   // C. logo / image
@@ -105,25 +111,31 @@ export const DEFAULT_BARCODE = {
   onePerPage: true,
 
   // custom physical page size (the actual print page for EACH barcode)
-  pageWidth: 50,
-  pageHeight: 30,
-  unit: 'mm', // mm | in
+  //
+  // Matched to the GP-3120TUC "BARCODE L" stock: Die-Cut Labels, 1.50 in x
+  // 1.00 in, 0.08 in exposed liner each side (folded into marginLeft/Right).
+  pageWidth: 1.5,
+  pageHeight: 1,
+  unit: 'in', // mm | in
 
   // the barcode symbol box, millimetres
-  barcodeWidthMm: 40,
-  barcodeHeightMm: 14,
+  // usable width = 38.1mm - 4mm side margins ~= 34mm; keep a quiet zone.
+  barcodeWidthMm: 32,
+  barcodeHeightMm: 11,
 
-  // outer spacing (page margins), millimetres
+  // outer spacing (page margins), millimetres.
+  // Left/Right = the 0.08 in (~2mm) exposed liner so the bars never ride the
+  // die-cut edge; Top/Bottom keep the stack off the label edge.
   marginTop: 1.5,
   marginBottom: 1.5,
-  marginLeft: 1.5,
-  marginRight: 1.5,
+  marginLeft: 2,
+  marginRight: 2,
 
   // spacing between the stacked elements, millimetres
-  gapName: 0.8,
-  gapBarcode: 0.8,
-  gapNumber: 0.6,
-  gapPrice: 0.8,
+  gapName: 0.6,
+  gapBarcode: 0.6,
+  gapNumber: 0.5,
+  gapPrice: 0.6,
 
   // alignment of the whole stack
   align: 'center', // left | center | right
@@ -137,7 +149,9 @@ export const DEFAULT_BARCODE = {
    * driver's paper orientation is portrait). 90 or 270 also swap the emitted
    * @page to portrait so the printer stops re-rotating the page itself.
    */
-  printRotation: 0,
+  // 180 matches the driver's "Portrait 180" orientation on the BARCODE L stock,
+  // so the printed label comes out upright instead of upside-down.
+  printRotation: 180,
 
   /**
    * content - rendered TOP -> BOTTOM in this fixed order:
@@ -158,14 +172,14 @@ export const DEFAULT_BARCODE = {
   showCustomText: false,
   customText: '',
 
-  // type sizes, px
-  brandNameSize: 9,
-  businessNameSize: 8,
-  productNameSize: 10,
-  numberSize: 9,
-  priceSize: 12,
-  mrpSize: 8,
-  attrSize: 8,
+  // type sizes, px - tuned to fit the 1.5 x 1.0 in label
+  brandNameSize: 8,
+  businessNameSize: 7,
+  productNameSize: 8,
+  numberSize: 8,
+  priceSize: 10,
+  mrpSize: 7,
+  attrSize: 7,
 };
 
 export const DEFAULT_PRINT = {
