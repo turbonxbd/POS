@@ -782,7 +782,9 @@ export async function renderPOS(mount, { onNeedRegister } = {}) {
 
   async function reprint(sale) {
     const full = sale.items ? sale : await salesService.getSaleById(sale.id);
-    const s = await settingsService.getSettings();
+    // Always the latest saved layout - a print is rare and user-initiated, so
+    // the extra fetch is free and guarantees Settings -> Print changes apply.
+    const s = await settingsService.getSettings({ fresh: true });
     printHtml(buildReceipt(full, { settings: s }));
   }
 

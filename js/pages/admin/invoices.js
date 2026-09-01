@@ -64,7 +64,8 @@ export default async function invoicesPage(ctx, mount) {
 
   async function quickPrint(id) {
     const sale = await salesService.getSaleById(id);
-    printHtml(buildReceipt(sale, { settings }));
+    const s = await settingsService.getSettings({ fresh: true });
+    printHtml(buildReceipt(sale, { settings: s }));
   }
 
   async function preview(id) {
@@ -76,6 +77,9 @@ export default async function invoicesPage(ctx, mount) {
       footer: `<button class="btn btn--ghost js-modal-close">Close</button><button class="btn btn--primary js-print">${icon('print', { size: 15 })} Print</button>`,
     });
     m.$('.js-preview').innerHTML = buildReceipt(sale, { settings });
-    m.$('.js-print').addEventListener('click', () => printHtml(buildReceipt(sale, { settings })));
+    m.$('.js-print').addEventListener('click', async () => {
+      const s = await settingsService.getSettings({ fresh: true });
+      printHtml(buildReceipt(sale, { settings: s }));
+    });
   }
 }

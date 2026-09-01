@@ -202,7 +202,7 @@ async function openTransactions() {
       </tr>`).join('')}</tbody></table></div>` : `<div class="empty-state"><h3>No transactions yet today</h3></div>`);
     m.$$('.js-rp').forEach((b) => b.addEventListener('click', async () => {
       const full = await salesService.getSaleById(b.dataset.id);
-      const s = await settingsService.getSettings();
+      const s = await settingsService.getSettings({ fresh: true });
       printHtml(buildReceipt(full, { settings: s }));
     }));
   } catch (err) {

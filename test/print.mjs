@@ -248,5 +248,28 @@ T('deep-merge keeps other settings', st.business?.name && st.pos?.invoiceTemplat
 const cfgAfter = pc.invoiceConfig(st);
 T('saved config resolves back through invoiceConfig', cfgAfter.pageWidth === 76.2);
 
+/* ---------- settings-service: cross-tab print-layout freshness ---------- */
+{
+  const { settingsService } = await import(R + 'js/services/settings-service.js');
+  const { default: bus } = await import(R + 'js/core/event-bus.js');
+  // warm the cache
+  const a = await settingsService.getSettings();
+  T('settings cache warmed', !!a && a.print);
+  // another tab changes the settings row -> db.js emits db:external-change
+  db.collection('settings').all().forEach((s) => db.collection('settings').update(s.id, { print: { ...s.print, invoice: { ...s.print.invoice, pageWidth: 55, unit: 'mm' } } }));
+  let heard = null;
+  bus.on('settings:changed', (s) => { heard = s; });
+  bus.emit('db:external-change', ['settings']);
+  await sleep(30);
+  const b = await settingsService.getSettings(); // no {fresh} - must already be refreshed
+  T('external settings change invalidates the cache (cashier picks it up, no reload)', b.print.invoice.pageWidth === 55);
+  T('external settings change re-emits settings:changed for live consumers', heard && heard.print.invoice.pageWidth === 55);
+  // an unrelated collection change must NOT drop the settings cache
+  const before = await settingsService.getSettings();
+  bus.emit('db:external-change', ['products', 'sales']);
+  await sleep(10);
+  T('an unrelated external change leaves the settings cache alone', (await settingsService.getSettings()) === before);
+}
+
 console.log('\n===== ' + pass + ' passed, ' + fail + ' failed =====');
 process.exit(fail ? 1 : 0);

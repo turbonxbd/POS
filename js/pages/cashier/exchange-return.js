@@ -322,7 +322,7 @@ export function openExchangeReturn() {
   }
 
   async function showDone(doc) {
-    const settings = await settingsService.getSettings();
+    const settings = await settingsService.getSettings({ fresh: true });
     const d = openModal({
       title: doc.type === 'exchange' ? 'Exchange complete' : 'Return complete',
       size: 'sm',

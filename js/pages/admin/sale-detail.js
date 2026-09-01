@@ -26,7 +26,6 @@ export default async function saleDetailPage(ctx, mount) {
     mount.innerHTML = `<div class="page"><div class="alert alert--danger"><div class="alert__body">${escapeHtml(err.message)}</div></div></div>`;
     return;
   }
-  const settings = await settingsService.getSettings();
 
   const shell = pageShell(mount, {
     title: sale.invoiceNo,
@@ -142,8 +141,9 @@ export default async function saleDetailPage(ctx, mount) {
       </div>`;
   }
 
-  function print() {
-    printHtml(buildReceipt(sale, { settings }));
+  async function print() {
+    const s = await settingsService.getSettings({ fresh: true });
+    printHtml(buildReceipt(sale, { settings: s }));
   }
 
   function openReturn() {

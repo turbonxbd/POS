@@ -18,9 +18,8 @@ import { buildReceipt } from './receipt.js';
 export async function openSaleDrawer(saleId) {
   const d = openDrawer({ title: 'Sale details', width: 460, body: blockLoader('Loading…') });
   let sale;
-  let settings;
   try {
-    [sale, settings] = await Promise.all([salesService.getSaleById(saleId), settingsService.getSettings()]);
+    sale = await salesService.getSaleById(saleId);
   } catch (err) {
     d.setBody(`<div class="alert alert--danger"><div class="alert__body">${escapeHtml(err.message)}</div></div>`);
     return;
@@ -51,7 +50,10 @@ export async function openSaleDrawer(saleId) {
   d.setFooter(`
     <button class="btn btn--ghost js-print">${icon('print', { size: 15 })} Print</button>
     <a class="btn btn--primary" href="#/sales/${sale.id}">Full details</a>`);
-  d.$('.js-print').addEventListener('click', () => printHtml(buildReceipt(sale, { settings })));
+  d.$('.js-print').addEventListener('click', async () => {
+    const s = await settingsService.getSettings({ fresh: true });
+    printHtml(buildReceipt(sale, { settings: s }));
+  });
   d.el.addEventListener('click', (e) => {
     if (e.target.closest('a[href^="#/"]')) d.close();
   });

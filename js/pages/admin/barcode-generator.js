@@ -164,8 +164,11 @@ export default async function barcodeGeneratorPage(ctx, mount) {
     toast.success('12 blank codes generated');
   }
 
-  function printPages() {
+  async function printPages() {
     if (!queue.length) return toast.warning('Add a product first.');
+    // Pull the latest saved barcode layout so a Settings -> Print -> Barcode
+    // change applies to the very next print without a reload.
+    settings = await settingsService.getSettings({ fresh: true });
     printHtml(buildBarcodePages(queue, { settings }));
   }
 
