@@ -194,10 +194,7 @@ T('Invoice: width/height/unit inputs', !!mount.querySelector('[data-p="print.inv
 }
 T('Invoice: image upload + spacing inputs', !!mount.querySelector('#inv-logo-input') && !!mount.querySelector('[data-p="print.invoice.marginTop"]'));
 T('Invoice: stock type + exposed liner fields present', !!mount.querySelector('#inv-stock-type') && !!mount.querySelector('[data-p="print.invoice.linerLeft"]') && !!mount.querySelector('[data-p="print.invoice.linerRight"]'));
-{
-  const r = mount.querySelector('[data-p="print.invoice.printRotation"]');
-  T('Invoice: extra-rotation control present, defaults to None (0)', !!r && r.tagName === 'SELECT' && r.value === '0');
-}
+T('Invoice: orientation control present', !!mount.querySelector('#inv-orientation') && mount.querySelector('#inv-orientation').tagName === 'SELECT');
 T('Invoice preview rendered a receipt', !!mount.querySelector('#preview-scale .receipt-preview'));
 T('Test print + Reset + Save buttons', !!mount.querySelector('#print-test') && !!mount.querySelector('#print-reset') && !!mount.querySelector('#print-save'));
 
@@ -209,10 +206,7 @@ T('Barcode: width/height/unit inputs', !!mount.querySelector('[data-p="print.bar
   T('Barcode: Width min matches the "in" unit (default 1.5in label, not mm-era min="5")', wEl.min === '0.2' && Number(wEl.value) >= Number(wEl.min));
 }
 T('Barcode: barcode size + align inputs', !!mount.querySelector('[data-p="print.barcode.barcodeWidthMm"]') && !!mount.querySelector('[data-p="print.barcode.align"]'));
-{
-  const r = mount.querySelector('[data-p="print.barcode.printRotation"]');
-  T('Barcode: extra-rotation control present, defaults to None (0)', !!r && r.tagName === 'SELECT' && r.value === '0');
-}
+T('Barcode: orientation control present', !!mount.querySelector('#bc-orientation') && mount.querySelector('#bc-orientation').tagName === 'SELECT');
 T('Barcode: stock type control present', !!mount.querySelector('#bc-stock-type'));
 T('Barcode: exposed liner fields present', !!mount.querySelector('[data-p="print.barcode.linerLeft"]') && !!mount.querySelector('[data-p="print.barcode.linerRight"]'));
 T('Barcode: label-gap field present', !!mount.querySelector('[data-p="print.barcode.labelGap"]'));

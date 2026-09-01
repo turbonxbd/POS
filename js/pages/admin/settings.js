@@ -20,19 +20,11 @@ import { mediaService } from '../../services/media-service.js';
 import bus from '../../core/event-bus.js';
 import store from '../../core/store.js';
 import {
-  DEFAULT_INVOICE, DEFAULT_BARCODE, UNITS, STOCK_TYPES,
+  DEFAULT_INVOICE, DEFAULT_BARCODE, UNITS, STOCK_TYPES, ORIENTATIONS, orientationToDeg,
   invoiceConfig, barcodeConfig, resolveSize, SAMPLE_SALE, SAMPLE_LABEL_ITEMS,
 } from '../../core/print-config.js';
 import { buildReceipt } from '../shared/receipt.js';
 import { buildBarcodePages } from '../shared/barcode-label.js';
-
-// "Extra rotation" - almost always None. The printer driver owns orientation.
-const ROT_OPTS = [
-  { value: '0', label: 'None — upright (recommended)' },
-  { value: '90', label: '90° (quarter turn right)' },
-  { value: '180', label: '180° (flip)' },
-  { value: '270', label: '270° (quarter turn left)' },
-];
 
 const SECTIONS = [
   { id: 'business', label: 'Business', icon: 'building' },
@@ -288,6 +280,17 @@ export default async function settingsPage(ctx, mount) {
       set('print.barcode.pageHeightAuto', e.target.value === 'continuous-variable');
       renderControls(); refreshPreview();
     });
+    // Orientation is the friendly control; keep printRotation (degrees) in step.
+    c.querySelector('#bc-orientation')?.addEventListener('change', (e) => {
+      set('print.barcode.orientation', e.target.value);
+      set('print.barcode.printRotation', orientationToDeg(e.target.value));
+      refreshPreview();
+    });
+    c.querySelector('#inv-orientation')?.addEventListener('change', (e) => {
+      set('print.invoice.orientation', e.target.value);
+      set('print.invoice.printRotation', orientationToDeg(e.target.value));
+      refreshPreview();
+    });
     // invoice logo upload / replace / remove (shares business.logoId)
     c.querySelector('#inv-logo-input')?.addEventListener('change', async (e) => {
       const file = e.target.files[0];
@@ -330,8 +333,8 @@ export default async function settingsPage(ctx, mount) {
         ${field(`Exposed liner — left (${u})`, 'print.invoice.linerLeft', numI('print.invoice.linerLeft', iv.linerLeft ?? 0, 'min="0" step="0.01"'))}
         ${field(`Exposed liner — right (${u})`, 'print.invoice.linerRight', numI('print.invoice.linerRight', iv.linerRight ?? 0, 'min="0" step="0.01"'))}
       </div>
-      ${field('Extra rotation', 'print.invoice.printRotation', sel('print.invoice.printRotation', String(iv.printRotation ?? 0), ROT_OPTS))}
-      <p class="field-hint">Leave at <strong>None</strong>. Orientation is set in the printer driver's <strong>Printing Preferences</strong> ("Portrait 180" for most receipt printers). This receipt is always sent upright. 90°/270° need a fixed height (Continuous&nbsp;Fixed or Die-Cut).</p>
+      ${field('Orientation', 'print.invoice.orientation', `<select class="select" id="inv-orientation">${ORIENTATIONS.map((o) => `<option value="${o.value}" ${o.value === (iv.orientation || 'portrait') ? 'selected' : ''}>${o.label}</option>`).join('')}</select>`)}
+      <p class="field-hint"><strong>Rotate in one place only.</strong> If the printer driver is set to "Portrait 180", leave this on <strong>Portrait</strong>. If the driver is plain Portrait and the receipt prints upside down, set this to <strong>Portrait 180°</strong>. 180 in both = upside down. 90°/270° need a fixed height (Continuous&nbsp;Fixed or Die-Cut).</p>
       ${sw('print.invoice.pageHeightAuto', iv.pageHeightAuto, 'Auto height — grow to fit content (on for Continuous / Variable Length)')}
       <p class="field-hint">Print page targets <strong>${sz.w}${sz.unit} × ${iv.pageHeightAuto ? 'auto' : sz.h + sz.unit}</strong> (${sz.wMm.toFixed(1)} mm wide) at 100% / actual size. In the browser print dialog set <strong>Scale 100%</strong>, <strong>Margins: None</strong>, headers/footers off.</p>
 
@@ -497,8 +500,8 @@ export default async function settingsPage(ctx, mount) {
 
       <div class="form-section-title">Position</div>
       ${field('Alignment', 'print.barcode.align', sel('print.barcode.align', bc.align, [{ value: 'left', label: 'Left' }, { value: 'center', label: 'Center' }, { value: 'right', label: 'Right' }]))}
-      ${field('Extra rotation', 'print.barcode.printRotation', sel('print.barcode.printRotation', String(bc.printRotation ?? 0), ROT_OPTS))}
-      <p class="field-hint">Leave at <strong>None</strong>. Your printer driver already handles orientation — set "Portrait 180" (or whatever your printer calls upright) in the driver's <strong>Printing Preferences</strong>. This page is always sent upright. Only use 90°/270° for a portrait label that needs landscape content; only use 180° if your driver has no orientation option at all. Affects the physical print only, never this preview.</p>`;
+      ${field('Orientation', 'print.barcode.orientation', `<select class="select" id="bc-orientation">${ORIENTATIONS.map((o) => `<option value="${o.value}" ${o.value === (bc.orientation || 'portrait') ? 'selected' : ''}>${o.label}</option>`).join('')}</select>`)}
+      <p class="field-hint"><strong>Rotate in one place only — not two.</strong> If the printer driver's own Orientation is set to "Portrait 180", leave this on <strong>Portrait</strong> (the driver does the flip). If the driver is on plain Portrait and the label prints upside down, set this to <strong>Portrait 180°</strong> instead. Setting 180 in both makes the label read bottom-to-top. Affects the physical print only, never this preview.</p>`;
   }
 
   /* ---- preview ---- */
