@@ -247,6 +247,20 @@ test('platform: dashboard + merchants + subscription lifecycle + revenue', funct
     $rmanNew = $kit->loginAs('rahman@store.bd', $reset['body']['tempPassword']);
     authed($kit, $rmanNew, 'POST', '/api/auth/change-password', ['json' => ['currentPassword' => $reset['body']['tempPassword'], 'newPassword' => 'rahmanpw1']]);
 
+    // S31: the platform activity log records Super Admin actions, platform-actor only
+    $plog = authed($kit, $admin, 'GET', '/api/platform/audit', ['query' => ['pageSize' => 'all']])['body'];
+    expect(count($plog['data']) > 0);
+    foreach ($plog['data'] as $l) {
+        expect($l['actorPlatform'] === true, 'row is a platform action');
+    }
+    expect(count(array_filter($plog['data'], static fn ($l) => ($l['meta']['action'] ?? '') === 'password_reset_by_platform')) >= 1);
+    $byAction = authed($kit, $admin, 'GET', '/api/platform/audit', ['query' => ['action' => 'update', 'pageSize' => 'all']])['body'];
+    foreach ($byAction['data'] as $l) {
+        expect_eq($l['action'], 'update');
+    }
+    // a merchant cannot reach it
+    expect_eq(authed($kit, $rmanNew, 'GET', '/api/platform/audit', [])['status'], 403);
+
     // the merchant renames itself in Settings -> propagates to Super Admin + /auth/me
     $rman = $kit->loginAs('rahman@store.bd', 'rahmanpw1');
     authed($kit, $rman, 'PUT', '/api/settings', ['json' => ['business' => ['name' => 'Rahman Superstore', 'email' => 'hi@rahman.store']]]);

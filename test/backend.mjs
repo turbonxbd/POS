@@ -55,6 +55,14 @@ let badLogin = false;
 try { await http.post('/auth/login', { email: 'admin@txdemo.shop', password: 'wrong' }); } catch (e) { badLogin = e.status === 401; }
 T('bad password rejected 401', badLogin);
 
+// login throttle: repeated failures for one email eventually return 429
+let throttled = 0;
+for (let i = 0; i < 12; i++) {
+  try { await http.post('/auth/login', { email: 'guessme@txdemo.shop', password: 'x' + i }); }
+  catch (e) { if (e.status === 429) throttled++; }
+}
+T('login throttle kicks in after repeated failures (429)', throttled > 0, `${throttled} of 12 hit 429`);
+
 // ---- products ----
 let np;
 await step('product lifecycle', async () => {

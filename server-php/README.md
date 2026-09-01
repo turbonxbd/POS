@@ -22,22 +22,22 @@ frontend only needs `APP_DATA_MODE=rest` + `APP_API_BASE_URL=/api`, which
 |---|---|---|
 | Auth | `/auth/login\|me\|logout\|change-password` — Argon2id/bcrypt, signed httpOnly session, CSRF, login throttle | 8 |
 | Catalog | products (+variants + branch stock), categories, brands, `/barcode/*`, `/products/lookup` | 4 |
-| Inventory | overview, movements, adjustments, transfers, valuation | 3 |
-| Sales | atomic checkout, **server invoice numbers**, idempotency, held sales, returns + exchanges | 8 |
-| Purchasing | suppliers (+ statement + payments), purchases (create/edit/receive/cancel), purchase returns | 1 |
-| People | customers (+ history + balance), roles, employees | 3 |
-| Finance | expenses, taxes, discounts (+ coupon validate), cash register (open/movements/close) | 4 |
-| Org | branches, settings (deep-merge), notifications, audit logs, **backup export + import** | 4 |
-| Analytics | `/dashboard` + 16 report types (`/reports/:type`) | 7 |
+| Inventory | overview, movements, adjustments, transfers, valuation, **reorder / low-stock report** | 3 |
+| Sales | atomic checkout, **server invoice numbers**, idempotency, held sales, returns + exchanges, **credit / due sales + `POST /sales/:id/payment`**, **loyalty-point redemption** | 8 |
+| Purchasing | suppliers (+ statement + payments), purchases (create/**edit draft** with per-line discount / VAT / freight, receive, cancel), purchase returns | 1 |
+| People | customers (+ history + balance + loyalty ledger), roles, employees | 3 |
+| Finance | expenses, taxes (percent + fixed), discounts (+ **product / category scope**, coupon validate), cash register (open / movements / **blind** close / **X-report data**) | 4 |
+| Org | branches, settings (deep-merge), notifications, **audit logs with user / branch / date filters**, **backup export + import** | 4 |
+| Analytics | `/dashboard` (+ `branchId=all`) + 23 report types (`/reports/:type`, incl. **dead-stock / ageing** and **loyalty points**) | 7 |
 | Media | `/media` upload (base64) + `/media/:id` serve, per-merchant | 2 |
 | Plans | `GET /plans` (public) + `/platform/plans` CRUD — one pricing source; each plan carries `setupPrice`, `monthlyPrice`, `includedBranches`, `extraBranchPrice` | 1 |
 | Platform settings | `GET /public-settings` (public contact subset), `GET/PATCH /platform/settings` — WhatsApp / business info / billing defaults / gateway driver + `paymentMethods[]` (bKash/Nagad/bank/card: account number, Bangla + English instructions, enabled flag). Payment methods are NEVER in the public subset. | 1 |
 | Signup | `POST /signup` (public) provisions an isolated merchant + pending subscription + auto-login; `POST /support` | 1 |
 | Billing (merchant self-service) | `GET /billing/summary` (+ enabled `paymentMethods`), `POST /billing/pay` (setup / monthly), `POST /billing/branch-request`, `POST /billing/payments/:id/cancel` — amounts computed server-side; manual submissions require a transaction ID + payer account number, land `pending`, notify Super Admin, and return a prefilled WhatsApp link | 1 |
 | Chat | `POST /chat` + `GET /chat/:id?since=` (public, polled), `/platform/chat*` (Super Admin) — real storage, no websockets | 1 |
-| Platform (Super Admin) | dashboard (+ `attention` counts), **approvals inbox** (`GET /platform/approvals`, `POST /platform/approvals/:merchantId/{approve,reject}` — one action verifies the newest pending payment / activates the account / notifies the merchant), merchants (+ detail), subscriptions, `subscription-payments` (record + Approve/**Reject** with reason, typed `initial`/`monthly`/`branch`), revenue (by type / month / plan, approved + rejected counts, upcoming), `platform/notifications` (payment-request bell), support | 3 |
+| Platform (Super Admin) | dashboard (+ `attention` counts), **approvals inbox** (`GET /platform/approvals`, `POST /platform/approvals/:merchantId/{approve,reject}` — one action verifies the newest pending payment / activates the account / notifies the merchant), merchants (paginated + tag filter + detail), **internal notes & tags**, **message a merchant**, **reset the owner's password** (`POST /platform/merchants/:id/reset-owner`), subscriptions, `subscription-payments` (record + Approve/**Reject** with reason, typed `initial`/`monthly`/`branch`), revenue (by type / month / plan, approved + rejected counts, upcoming), `platform/notifications` (payment-request bell), **`GET /platform/audit` activity log**, support | 3 |
 | Access gate | `App::enforceAccessGate` — a blocked subscription (expired past grace / suspended / cancelled) returns 402 on merchant writes; GET + `/billing/*` stay open | (in billing) |
-| **Total** | | **53/53 passing** (`php tests/run.php`) |
+| **Total** | | **65/65 passing** (`php tests/run.php`) |
 
 ## Security model (industry-standard practices, not "100% secure")
 

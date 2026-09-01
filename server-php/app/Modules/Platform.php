@@ -52,6 +52,7 @@ final class Platform
         $r->post('/platform/support/:id/reply', fn (Context $c, $p) => self::supportReply($c, $p));
         $r->patch('/platform/support/:id', fn (Context $c, $p) => self::supportStatus($c, $p));
 
+        $r->get('/platform/audit', fn (Context $c) => self::auditLog($c));
         $r->get('/platform/notifications', fn (Context $c) => self::notifications($c));
         $r->post('/platform/notifications/:id/read', fn (Context $c, $p) => self::notificationRead($c, $p));
         $r->post('/platform/notifications/read-all', fn (Context $c) => self::notificationsReadAll($c));
@@ -370,6 +371,62 @@ final class Platform
                 'paymentId' => $pay['id'], 'merchantId' => $pay['merchantId'], 'type' => $pay['type'],
                 'amount' => $pay['amount'] ?? 0, 'reference' => $pay['reference'] ?? null, 'planOrBranch' => $planOrBranch,
             ],
+        ]);
+    }
+
+    private static function auditLog(Context $ctx): Response
+    {
+        $ctx->requirePlatformAdmin();
+        $q = $ctx->request->query;
+        $where = ["doc LIKE '%\"actorPlatform\":true%'"];
+        $params = [];
+        foreach (['action' => 'action', 'actorId' => 'actor_id'] as $k => $col) {
+            if (!empty($q[$k]) && $q[$k] !== 'all') {
+                $where[] = "{$col} = :{$col}";
+                $params[":{$col}"] = $q[$k];
+            }
+        }
+        if (!empty($q['merchantId'])) {
+            $where[] = 'doc LIKE :mrc';
+            $params[':mrc'] = '%"merchantId":"' . $q['merchantId'] . '"%';
+        }
+        $rows = $ctx->db->all(
+            'SELECT doc FROM audit_logs WHERE ' . implode(' AND ', $where) . ' ORDER BY at DESC',
+            $params,
+        );
+        $data = array_map(static fn ($r) => json_decode($r['doc'], true), $rows);
+        // date range + text search + pagination in memory (small platform-action set)
+        $from = !empty($q['from']) ? strtotime((string) $q['from']) : null;
+        $to = !empty($q['to']) ? strtotime((string) $q['to']) : null;
+        $search = mb_strtolower(trim((string) ($q['search'] ?? $q['q'] ?? '')));
+        $data = array_values(array_filter($data, static function ($l) use ($from, $to, $search) {
+            $t = strtotime((string) ($l['at'] ?? ''));
+            if ($from !== null && $t < $from) {
+                return false;
+            }
+            if ($to !== null && $t > $to) {
+                return false;
+            }
+            if ($search !== '') {
+                $hay = mb_strtolower(($l['actorName'] ?? '') . ' ' . ($l['entity'] ?? '') . ' ' . ($l['action'] ?? '') . ' ' . ($l['entityId'] ?? ''));
+                if (!str_contains($hay, $search)) {
+                    return false;
+                }
+            }
+            return true;
+        }));
+        foreach ($data as &$l) {
+            $mid = $l['merchantId'] ?? ($l['meta']['merchantId'] ?? null);
+            $l['merchantName'] = $mid ? (json_decode((string) ($ctx->db->first('SELECT doc FROM merchants WHERE id = :id', [':id' => $mid])['doc'] ?? '{}'), true)['name'] ?? null) : null;
+        }
+        unset($l);
+        $total = count($data);
+        $pageSize = ($q['pageSize'] ?? null) === 'all' ? max($total, 1) : max(1, (int) ($q['pageSize'] ?? 20));
+        $totalPages = max(1, (int) ceil($total / $pageSize));
+        $page = min(max(1, (int) ($q['page'] ?? 1)), $totalPages);
+        return Response::json([
+            'data' => array_slice($data, ($page - 1) * $pageSize, $pageSize),
+            'total' => $total, 'page' => $page, 'pageSize' => $pageSize, 'totalPages' => $totalPages,
         ]);
     }
 

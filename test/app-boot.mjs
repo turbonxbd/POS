@@ -206,6 +206,7 @@ const R = '../';
     ['#/support', '#sa-body'],
     ['#/chat', '.sa-chat'],
     ['#/backups', '.sa-tablecard, .sa-card'],
+    ['#/audit', '.sa-tablecard, .sa-filterbar'],
     ['#/settings', '#sec-contact'],
   ];
   for (const [hash, sel] of routes) {

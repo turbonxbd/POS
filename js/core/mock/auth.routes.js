@@ -14,6 +14,19 @@ import { now } from '../../utils/date.js';
 import config from '../../config.js';
 import { liveStatus, dueAmount, isBlocked, graceDays, notifyPlatform } from './platform-helpers.js';
 
+// In-memory login-failure counter (email -> { count, first }). A real backend
+// persists this per IP + email; the deployed mock has no server, so this holds
+// for the tab's lifetime, which is enough to slow a password-guessing loop.
+const loginAttempts = new Map();
+function noteLoginFailure(email) {
+  const rec = loginAttempts.get(email);
+  if (!rec || Date.now() - rec.first >= config.security.loginAttemptWindowMs) {
+    loginAttempts.set(email, { count: 1, first: Date.now() });
+  } else {
+    rec.count += 1;
+  }
+}
+
 function hydrateUser(user) {
   const role = db.collection('roles').get(user.roleId) || null;
   const isPlatform = !!user.platform;
@@ -87,10 +100,18 @@ export default function register(router) {
     const password = String(body?.password || '');
     if (!email || !password) badRequest('Email and password are required', { email: !email ? 'Required' : undefined, password: !password ? 'Required' : undefined });
 
+    // Login throttle: too many recent failures for this email -> 429.
+    const rec = loginAttempts.get(email);
+    if (rec && Date.now() - rec.first < config.security.loginAttemptWindowMs && rec.count >= config.security.loginMaxAttempts) {
+      const mins = Math.ceil((config.security.loginAttemptWindowMs - (Date.now() - rec.first)) / 60000);
+      return fail(429, `Too many sign-in attempts. Try again in about ${mins} minute${mins === 1 ? '' : 's'}.`);
+    }
+
     const user = db.collection('users').findOne((u) => u.email.toLowerCase() === email);
     // Constant-ish response to avoid user enumeration in the demo.
     if (!user) {
       await hashPassword(password);
+      noteLoginFailure(email);
       return fail(401, 'Incorrect email or password');
     }
     if (user.status !== 'active') return fail(403, 'This account is deactivated. Contact an administrator.');
@@ -98,9 +119,11 @@ export default function register(router) {
     const valid = await verifyPassword(password, user.passwordHash);
     if (!valid) {
       audit('login_failed', 'user', user.id, { meta: { email } });
+      noteLoginFailure(email);
       return fail(401, 'Incorrect email or password');
     }
 
+    loginAttempts.delete(email);
     db.collection('users').update(user.id, { lastLoginAt: now() });
     const token = issueToken(user.id);
     const hydrated = hydrateUser(db.collection('users').get(user.id));

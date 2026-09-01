@@ -33,6 +33,7 @@ const NAV = [
   { path: '/support', label: 'Support', icon: 'help' },
   { path: '/chat', label: 'Chat', icon: 'inbox' },
   { path: '/backups', label: 'Backups', icon: 'database' },
+  { path: '/audit', label: 'Activity log', icon: 'history' },
   { path: '/settings', label: 'Settings', icon: 'settings' },
 ];
 
@@ -49,6 +50,7 @@ const ROUTES = [
   { path: '/support', title: 'Support', load: () => import('./pages/platform/support.js') },
   { path: '/chat', title: 'Chat', load: () => import('./pages/platform/chat.js') },
   { path: '/backups', title: 'Backups', load: () => import('./pages/platform/backups.js') },
+  { path: '/audit', title: 'Activity log', load: () => import('./pages/platform/audit.js') },
   { path: '/settings', title: 'Settings', load: () => import('./pages/platform/settings.js') },
 ];
 

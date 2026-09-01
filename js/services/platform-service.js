@@ -48,6 +48,9 @@ export const platformService = {
   replySupport: (id, text) => http.post(`/platform/support/${id}/reply`, { text }),
   setSupportStatus: (id, status) => http.patch(`/platform/support/${id}`, { status }),
 
+  /* platform activity log */
+  audit: (params = {}) => http.get('/platform/audit', { params }),
+
   // server-side backups (rest deployment only)
   backups: () => http.get('/platform/backups'),
   runBackup: () => http.post('/platform/backups/run'),

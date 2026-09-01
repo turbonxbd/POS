@@ -4,7 +4,7 @@
  * The merchant panels never call these.
  */
 import db from '../db.js';
-import { ok, created, notFound, badRequest } from './router.js';
+import { ok, created, notFound, badRequest, applyListQuery } from './router.js';
 import { audit } from './helpers.js';
 import { requirePlatform, liveStatus, subscribeMerchant, dueAmount, applyConfirmedPayment, PAYMENT_TYPES } from './platform-helpers.js';
 import { activePlans } from './plans.routes.js';
@@ -452,6 +452,29 @@ export default function register(router) {
     if (!c('support_requests').get(params.id)) notFound('Support request');
     const status = ['open', 'answered', 'closed'].includes(body?.status) ? body.status : 'open';
     return ok(c('support_requests').update(params.id, { status }));
+  });
+
+  /* ---- platform activity log (every Super Admin action, across all merchants) ---- */
+  router.get('/platform/audit', ({ query }) => {
+    requirePlatform();
+    let rows = db.collection('audit_logs').all().filter((l) => l.actorPlatform);
+    if (query.action && query.action !== 'all') rows = rows.filter((l) => l.action === query.action);
+    if (query.actorId && query.actorId !== 'all') rows = rows.filter((l) => l.actorId === query.actorId);
+    if (query.merchantId) rows = rows.filter((l) => l.merchantId === query.merchantId || l.meta?.merchantId === query.merchantId);
+    if (query.from || query.to) {
+      const from = query.from ? new Date(query.from).getTime() : -Infinity;
+      const to = query.to ? new Date(query.to).getTime() : Infinity;
+      rows = rows.filter((l) => { const t = new Date(l.at).getTime(); return t >= from && t <= to; });
+    }
+    const decorated = rows.map((l) => ({
+      ...l,
+      merchantName: (l.merchantId && c('merchants').get(l.merchantId)?.name)
+        || (l.meta?.merchantId && c('merchants').get(l.meta.merchantId)?.name) || null,
+    }));
+    return ok(applyListQuery(decorated, query, {
+      searchable: ['actorName', 'entity', 'action', 'entityId', 'merchantName'],
+      sortable: ['at', 'action', 'entity'], defaultSort: 'at', defaultDir: 'desc',
+    }));
   });
 
   /* ---- platform notifications (Super Admin bell) ---- */

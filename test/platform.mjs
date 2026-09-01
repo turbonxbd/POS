@@ -117,6 +117,14 @@ await http.post('/auth/change-password', { currentPassword: reset.tempPassword, 
 await clearContext();
 await login('superadmin@postxbd.app', 'superadmin123');
 
+// S31: the platform activity log records Super Admin actions
+const plog = await http.get('/platform/audit', { params: { pageSize: 'all' } });
+T('platform activity log returns rows', Array.isArray(plog.data) && plog.data.length > 0);
+T('platform activity log is platform-actor only', plog.data.every((l) => l.actorPlatform === true));
+T('platform activity log captured the password reset', plog.data.some((l) => l.meta?.action === 'password_reset_by_platform'));
+const plogFiltered = await http.get('/platform/audit', { params: { action: 'update', pageSize: 'all' } });
+T('platform activity log filters by action', plogFiltered.data.every((l) => l.action === 'update'));
+
 /* the merchant renames their business in Settings -> propagates to Super Admin */
 await login('admin@txdemo.shop', 'demo1234');
 await http.put('/settings', { business: { name: 'TX Demo Retail', email: 'ops@txdemo.shop' } });

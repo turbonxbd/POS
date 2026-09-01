@@ -34,6 +34,7 @@ final class Audit
             'id' => $id, 'action' => $action, 'entity' => $entity, 'entityId' => $entityId,
             'actorId' => $actor['id'] ?? null,
             'actorName' => $actor['name'] ?? 'system',
+            'actorPlatform' => (bool) ($actor['isPlatformAdmin'] ?? false),
             'before' => $opts['before'] ?? null,
             'after' => $opts['after'] ?? null,
             'meta' => $meta,
