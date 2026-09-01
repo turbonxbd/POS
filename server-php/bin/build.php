@@ -100,6 +100,12 @@ copy("$server/config/config.sample.php", "$dist/config/config.sample.php");
 @mkdir("$dist/storage/backups", 0775, true);
 @mkdir("$dist/storage/logs", 0775, true);
 
+/* deny HTTP access to every backend folder, whatever it ends up next to */
+$deny = "Require all denied\n<IfModule !mod_authz_core.c>\n  Deny from all\n</IfModule>\n";
+foreach (['app', 'config', 'storage', 'migrations', 'bin'] as $d) {
+    file_put_contents("$dist/$d/.htaccess", $deny);
+}
+
 echo "Built $dist\n";
 echo "  dist/public_html/  -> upload contents into public_html/\n";
 echo "  dist/app  dist/config  dist/storage  dist/migrations  dist/bin  -> upload one level ABOVE public_html\n";

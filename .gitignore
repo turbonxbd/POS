@@ -52,3 +52,6 @@ _*.txt
 
 # Accidental nested clone of the deploy repo
 /POS/
+
+# deploy build artifacts
+server-php/upload-*.zip

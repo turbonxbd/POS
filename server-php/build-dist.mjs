@@ -85,6 +85,13 @@ cpSync(join(server, 'config', 'config.sample.php'), join(dist, 'config', 'config
 mkdirSync(join(dist, 'storage', 'backups'), { recursive: true });
 mkdirSync(join(dist, 'storage', 'logs'), { recursive: true });
 
+// Defence in depth: deny HTTP access to every backend folder, whatever the
+// hosting layout puts them next to.
+const DENY = 'Require all denied\n<IfModule !mod_authz_core.c>\n  Deny from all\n</IfModule>\n';
+for (const d of ['app', 'config', 'storage', 'migrations', 'bin']) {
+  writeFileSync(join(dist, d, '.htaccess'), DENY);
+}
+
 console.log(`\nBuilt ${dist}`);
 console.log(`  API base    : ${API_BASE}`);
 console.log(`  Canonical   : ${DOMAIN || '(unchanged - pass --domain to fix SEO URLs)'}`);

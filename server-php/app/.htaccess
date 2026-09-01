@@ -1,0 +1,10 @@
+# Defence in depth: the application code must never be served, even if it ends
+# up inside a web-reachable folder on some hosting layout. The API front
+# controller (public_html/api/index.php) loads these files directly from disk;
+# it does not need them to be reachable over HTTP.
+Require all denied
+
+<IfModule !mod_authz_core.c>
+  Order allow,deny
+  Deny from all
+</IfModule>
