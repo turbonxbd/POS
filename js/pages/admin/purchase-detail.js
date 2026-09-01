@@ -26,6 +26,7 @@ export default async function purchaseDetailPage(ctx, mount) {
     title: p.reference,
     breadcrumb: [{ label: 'Purchases', href: '#/purchases' }, { label: p.reference }],
     actions: [
+      can('purchases.edit') && ['draft', 'ordered'].includes(p.status) && { label: 'Edit', icon: 'edit', variant: 'outline', onClick: () => (location.hash = `#/purchases/${p.id}/edit`) },
       can('purchases.receive') && !['received', 'cancelled'].includes(p.status) && { label: 'Receive Stock', icon: 'download', variant: 'primary', onClick: openReceive },
       can('purchases.return') && ['received', 'partially_received'].includes(p.status) && { label: 'Return to Supplier', icon: 'rotate-ccw', variant: 'outline', onClick: openReturn },
       can('purchases.edit') && ['draft', 'ordered'].includes(p.status) && { label: 'Cancel', icon: 'x', variant: 'outline', onClick: doCancel },
@@ -39,20 +40,26 @@ export default async function purchaseDetailPage(ctx, mount) {
       <div class="row" style="gap:var(--sp-2);margin-bottom:var(--sp-4)">${statusBadge(p.status)}
         <span class="muted">${escapeHtml(p.supplierName)} · ${fmtDateTime(p.createdAt)}</span></div>
       ${statStrip([
+        { label: 'Subtotal', value: money.format(p.subtotal ?? p.grandTotal) },
+        ...(p.discountTotal ? [{ label: 'Discount', value: '-' + money.format(p.discountTotal) }] : []),
+        ...(p.taxTotal ? [{ label: 'VAT', value: money.format(p.taxTotal) }] : []),
+        ...(p.freightTotal ? [{ label: 'Freight', value: money.format(p.freightTotal) }] : []),
         { label: 'Total', value: money.format(p.grandTotal) },
         { label: 'Paid', value: money.format(p.paidTotal) },
         { label: 'Due', value: money.format(p.dueTotal) },
         { label: 'Received', value: `${p.lines.reduce((s, l) => s + (l.receivedQty || 0), 0)} / ${p.lines.reduce((s, l) => s + l.qty, 0)} units` },
       ])}
       <div class="table-wrap"><table class="table">
-        <thead><tr><th>Product</th><th class="num">Ordered</th><th class="num">Received</th><th class="num">Returned</th><th class="num">Unit cost</th><th class="num">Line total</th></tr></thead>
+        <thead><tr><th>Product</th><th class="num">Ordered</th><th class="num">Received</th><th class="num">Returned</th><th class="num">Unit cost</th><th class="num">Disc</th><th class="num">VAT</th><th class="num">Line total</th></tr></thead>
         <tbody>${p.lines.map((l) => `<tr>
           <td>${escapeHtml(l.name || l.productId)}</td>
           <td class="num">${l.qty}</td>
           <td class="num">${l.receivedQty || 0}</td>
           <td class="num">${l.returnedQty || 0}</td>
           <td class="num">${money.format(l.unitCost)}</td>
-          <td class="num">${money.format(l.qty * l.unitCost)}</td>
+          <td class="num">${l.discountType === 'percent' && l.discountValue ? l.discountValue + '%' : '—'}</td>
+          <td class="num">${l.taxRate ? l.taxRate + '%' : '—'}</td>
+          <td class="num">${money.format(l.lineTotal ?? l.qty * l.unitCost)}</td>
         </tr>`).join('')}</tbody>
       </table></div>
       ${p.note ? `<p class="muted text-sm" style="margin-top:var(--sp-3)">${escapeHtml(p.note)}</p>` : ''}`;

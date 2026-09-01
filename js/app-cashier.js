@@ -24,6 +24,7 @@ import { renderPOS } from './pages/cashier/pos.js';
 import { openExchangeReturn } from './pages/cashier/exchange-return.js';
 import { langSwitchHTML, wireLangSwitch } from './components/lang-switch.js';
 import { buildReceipt } from './pages/shared/receipt.js';
+import { xReport, zReport } from './pages/shared/register-report.js';
 
 const root = document.getElementById('pos-root');
 let currentSession = null;
@@ -155,6 +156,7 @@ function renderTerminal() {
   attachMenu(topbar.querySelector('.js-user'), () => [
     { label: user.email, header: true },
     can('register.operate') && currentSession && { label: 'Cash In / Out', icon: 'wallet', onSelect: cashMovement },
+    can('register.view') && currentSession && { label: 'Print X-Report (mid-shift)', icon: 'receipt', onSelect: printXReport },
     can('register.operate') && currentSession && { label: 'Close Register', icon: 'drawer', onSelect: closeRegister },
     can('dashboard.view') && { label: 'Open Admin', icon: 'dashboard', onSelect: () => (location.href = 'admin.html') },
     { label: 'Back to Portal', icon: 'grid', onSelect: () => (location.href = 'portal.html') },
@@ -219,39 +221,57 @@ async function cashMovement() {
   });
 }
 
+async function printXReport() {
+  try {
+    const s = await cashRegisterService.getSessionById(currentSession.id);
+    printHtml(xReport(s));
+  } catch (err) {
+    toast.fromError(err);
+  }
+}
+
 async function closeRegister() {
+  const blind = settings.pos?.blindClose === true;
   const m = openModal({ title: 'Close Register', size: 'md', body: '<div class="loading-block"><span class="spinner"></span></div>' });
   const s = await cashRegisterService.getSessionById(currentSession.id);
+
+  const breakdown = blind
+    ? `<p class="muted text-sm" style="margin-bottom:var(--sp-4)">Count everything in the drawer and enter the total. The expected amount and any difference are only shown on the Z-Report after you close.</p>`
+    : `<div class="stat-strip" style="margin-bottom:var(--sp-4)">
+        <div class="stat-strip__item"><div class="label">Opening cash</div><div class="value">${money.format(s.openingCash)}</div></div>
+        <div class="stat-strip__item"><div class="label">Cash sales</div><div class="value">${money.format(s.cashSales)}</div></div>
+        <div class="stat-strip__item"><div class="label">Cash refunds</div><div class="value">${money.format(s.cashRefunds)}</div></div>
+        <div class="stat-strip__item"><div class="label">Cash expenses</div><div class="value">${money.format(s.cashExpenses)}</div></div>
+        <div class="stat-strip__item"><div class="label">Cash in / out</div><div class="value">${money.format(s.cashIn - s.cashOut)}</div></div>
+        <div class="stat-strip__item"><div class="label">Expected in drawer</div><div class="value">${money.format(s.expectedCash)}</div></div>
+      </div>`;
+
   m.setBody(`
-    <div class="stat-strip" style="margin-bottom:var(--sp-4)">
-      <div class="stat-strip__item"><div class="label">Opening cash</div><div class="value">${money.format(s.openingCash)}</div></div>
-      <div class="stat-strip__item"><div class="label">Cash sales</div><div class="value">${money.format(s.cashSales)}</div></div>
-      <div class="stat-strip__item"><div class="label">Cash refunds</div><div class="value">${money.format(s.cashRefunds)}</div></div>
-      <div class="stat-strip__item"><div class="label">Cash expenses</div><div class="value">${money.format(s.cashExpenses)}</div></div>
-      <div class="stat-strip__item"><div class="label">Cash in / out</div><div class="value">${money.format(s.cashIn - s.cashOut)}</div></div>
-      <div class="stat-strip__item"><div class="label">Expected in drawer</div><div class="value">${money.format(s.expectedCash)}</div></div>
-    </div>
+    ${breakdown}
     <label class="field"><span class="label">Counted cash in drawer</span>
-      <input class="input js-counted" type="number" step="0.01" min="0" style="font-size:var(--fs-xl);height:52px" value="${money.toMajor(s.expectedCash)}"></label>
-    <div class="alert js-diff" style="margin-top:var(--sp-3)"><div class="alert__body">Difference: <strong class="js-diff-v">৳ 0.00</strong></div></div>
+      <input class="input js-counted" type="number" step="0.01" min="0" style="font-size:var(--fs-xl);height:52px" value="${blind ? '' : money.toMajor(s.expectedCash)}" placeholder="0.00" ${blind ? 'autofocus' : ''}></label>
+    ${blind ? '' : `<div class="alert js-diff" style="margin-top:var(--sp-3)"><div class="alert__body">Difference: <strong class="js-diff-v">৳ 0.00</strong></div></div>`}
     <label class="field" style="margin-top:var(--sp-3)"><span class="label">Closing note</span><textarea class="textarea js-cnote" rows="2"></textarea></label>`);
   m.setFooter(`<button class="btn btn--ghost js-cancel">Cancel</button><button class="btn btn--primary js-do">Close & Print Z-Report</button>`);
   const counted = m.$('.js-counted');
-  const diffV = m.$('.js-diff-v');
-  const diffBox = m.$('.js-diff');
-  const recalc = () => {
-    const d = money.toMinor(counted.value) - s.expectedCash;
-    diffV.textContent = money.format(d);
-    diffBox.className = 'alert js-diff ' + (d === 0 ? 'alert--success' : d > 0 ? 'alert--info' : 'alert--danger');
-  };
-  counted.addEventListener('input', recalc);
-  recalc();
+  if (!blind) {
+    const diffV = m.$('.js-diff-v');
+    const diffBox = m.$('.js-diff');
+    const recalc = () => {
+      const d = money.toMinor(counted.value) - s.expectedCash;
+      diffV.textContent = money.format(d);
+      diffBox.className = 'alert js-diff ' + (d === 0 ? 'alert--success' : d > 0 ? 'alert--info' : 'alert--danger');
+    };
+    counted.addEventListener('input', recalc);
+    recalc();
+  }
   m.$('.js-cancel').addEventListener('click', () => m.close());
   m.$('.js-do').addEventListener('click', async () => {
+    if (blind && counted.value === '') { toast.warning('Enter the counted cash amount.'); return; }
     m.setBusy(true);
     try {
       const closed = await cashRegisterService.closeRegister(currentSession.id, {
-        countedCash: money.toMinor(counted.value),
+        countedCash: money.toMinor(counted.value || 0),
         note: m.$('.js-cnote').value,
       });
       m.close();
@@ -264,31 +284,6 @@ async function closeRegister() {
       toast.fromError(err);
     }
   });
-}
-
-function zReport(s) {
-  const biz = store.get('business') || {};
-  const row = (l, v) => `<div class="rcpt__row"><span>${l}</span><span class="num">${v}</span></div>`;
-  return `<div class="receipt-preview size-80"><div class="rcpt">
-    <div class="rcpt__center"><div class="rcpt__biz-name">${escapeHtml(biz.name || 'Afia')}</div><div class="rcpt__biz-meta">REGISTER Z-REPORT</div></div>
-    <hr class="rcpt__hr">
-    ${row('Session', escapeHtml(s.reference))}
-    ${row('Cashier', escapeHtml(s.cashierName))}
-    ${row('Opened', fmtDateTime(s.openedAt))}
-    ${row('Closed', fmtDateTime(s.closedAt))}
-    <hr class="rcpt__hr">
-    ${row('Opening cash', money.format(s.openingCash, { withSymbol: false }))}
-    ${row('Cash sales', money.format(s.cashSales, { withSymbol: false }))}
-    ${row('Card / other', money.format(s.cardSales, { withSymbol: false }))}
-    ${row('Cash refunds', '-' + money.format(s.cashRefunds, { withSymbol: false }))}
-    ${row('Cash expenses', '-' + money.format(s.cashExpenses, { withSymbol: false }))}
-    ${row('Cash in/out', money.format(s.cashIn - s.cashOut, { withSymbol: false }))}
-    <div class="rcpt__grand rcpt__row"><span>EXPECTED</span><span class="num">${money.format(s.closingExpectedCash, { withSymbol: false })}</span></div>
-    ${row('Counted', money.format(s.closingCountedCash, { withSymbol: false }))}
-    ${row('Difference', money.format(s.difference, { withSymbol: false }))}
-    <hr class="rcpt__hr">
-    <div class="rcpt__thanks">${escapeHtml(s.closingNote || '')}</div>
-  </div></div>`;
 }
 
 bus.on('pos:sale-completed', () => {

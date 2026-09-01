@@ -4,11 +4,15 @@
 import { pageShell, statusBadge, statStrip } from '../shared/page-kit.js';
 import { createDataTable } from '../../components/data-table.js';
 import { openModal } from '../../components/modal.js';
+import { toast } from '../../components/toast.js';
 import { blockLoader } from '../../components/skeleton.js';
 import { escapeHtml } from '../../utils/dom.js';
 import { fmtDateTime } from '../../utils/date.js';
+import { printHtml } from '../../utils/print.js';
 import money from '../../utils/money.js';
+import { can } from '../../core/rbac.js';
 import cashRegisterService from '../../services/cash-register-service.js';
+import { xReport, zReport } from '../shared/register-report.js';
 
 export default async function cashRegisterPage(ctx, mount) {
   const shell = pageShell(mount, {
@@ -52,7 +56,10 @@ export default async function cashRegisterPage(ctx, mount) {
 
   async function showSession(id) {
     const m = openModal({ title: 'Register Session', size: 'md', body: blockLoader('Loading…') });
-    const s = await cashRegisterService.getSessionById(id);
+    let s = await cashRegisterService.getSessionById(id);
+    paint();
+
+    function paint() {
     m.setBody(`
       <div class="row" style="gap:var(--sp-2);margin-bottom:var(--sp-3)">${statusBadge(s.status)}<span class="muted">${escapeHtml(s.reference)} · ${escapeHtml(s.cashierName)}</span></div>
       ${statStrip([
@@ -68,11 +75,45 @@ export default async function cashRegisterPage(ctx, mount) {
         <div class="detail-list__row"><dt>Difference</dt><dd class="${s.difference === 0 ? '' : 'text-danger'}">${money.format(s.difference)}</dd></div>
         <div class="detail-list__row"><dt>Closed</dt><dd>${fmtDateTime(s.closedAt)}</dd></div>
         ${s.closingNote ? `<div class="detail-list__row"><dt>Note</dt><dd>${escapeHtml(s.closingNote)}</dd></div>` : ''}
-      </dl>` : '<p class="muted text-sm">This session is still open. It is closed from the cashier terminal.</p>'}
+      </dl>` : '<p class="muted text-sm">This session is still open.</p>'}
       ${(s.movements || []).length ? `<h4 class="section-title" style="margin-top:var(--sp-4)">Cash movements</h4>
         <div class="table-wrap"><table class="table table--compact"><thead><tr><th>Time</th><th>Direction</th><th class="num">Amount</th><th>Reason</th></tr></thead>
         <tbody>${s.movements.map((mv) => `<tr><td>${fmtDateTime(mv.at)}</td><td>${mv.direction === 'in' ? 'In' : 'Out'}</td><td class="num">${money.format(mv.amount)}</td><td>${escapeHtml(mv.reason)}</td></tr>`).join('')}</tbody></table></div>` : ''}
     `);
-    m.setFooter('<button class="btn btn--primary js-modal-close">Close</button>');
+    m.setFooter(`
+      ${s.status === 'open'
+        ? `<button class="btn btn--ghost js-x">Print X-Report</button>${can('register.operate') ? '<button class="btn btn--danger js-close">Force close…</button>' : ''}`
+        : `<button class="btn btn--ghost js-z">Print Z-Report</button>`}
+      <button class="btn btn--primary js-modal-close">Close</button>`);
+    m.$('.js-x')?.addEventListener('click', () => printHtml(xReport(s)));
+    m.$('.js-z')?.addEventListener('click', () => printHtml(zReport(s)));
+    m.$('.js-close')?.addEventListener('click', forceClose);
+    }
+
+    function forceClose() {
+    const dlg = openModal({
+      title: `Force close ${s.reference}`,
+      size: 'sm',
+      body: `<p class="text-sm muted">Closing on behalf of ${escapeHtml(s.cashierName)}. Enter the counted cash from the drawer.</p>
+        <label class="field"><span class="field__label">Counted cash</span>
+          <input type="number" min="0" step="0.01" class="input js-c" placeholder="0.00" autofocus></label>
+        <label class="field"><span class="field__label">Note</span>
+          <input type="text" class="input js-n" value="Closed by admin"></label>`,
+      footer: `<button class="btn btn--ghost js-modal-close">Cancel</button><button class="btn btn--danger js-do">Close register</button>`,
+    });
+    dlg.$('.js-do').addEventListener('click', async () => {
+      dlg.setBusy(true);
+      try {
+        s = await cashRegisterService.closeRegister(s.id, { countedCash: money.toMinor(dlg.$('.js-c').value || 0), note: dlg.$('.js-n').value });
+        dlg.close();
+        toast.success('Register closed');
+        paint();
+      } catch (err) {
+        dlg.setBusy(false);
+        toast.error(err?.data?.message || err.message || 'Could not close the session');
+      }
+    });
+    }
   }
 }
+

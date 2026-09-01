@@ -142,6 +142,7 @@ export default async function settingsPage(ctx, mount) {
         ${sw('pos.printAfterSale', pos.printAfterSale, 'Automatically print a receipt after each sale')}
         ${sw('pos.autoFocusBarcode', pos.autoFocusBarcode, 'Auto-focus the barcode field between scans')}
         ${sw('pos.requireOpenRegister', pos.requireOpenRegister, 'Require an open cash register to sell')}
+        ${sw('pos.blindClose', pos.blindClose, 'Blind register close — cashier counts the drawer without seeing the expected amount')}
         ${sw('pos.allowPriceOverride', pos.allowPriceOverride, 'Allow price override at the till (with permission)')}
         ${sw('pos.showProductImages', pos.showProductImages, 'Show product images in the POS grid')}
         <p class="field-hint">Invoice paper size, spacing, logo and visible fields are all in <strong>Settings → Print → Invoice</strong>.</p>`;

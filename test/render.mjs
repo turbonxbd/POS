@@ -167,6 +167,51 @@ for (const [name, path, ctx] of [
   }
 }
 
+// cash-register: session modal offers X/Z-report printing
+{
+  errs.length = 0;
+  mount.replaceChildren();
+  const { db } = await import(R + 'js/core/db.js');
+  const sess = db.collection('register_sessions').all()[0];
+  if (sess) {
+    const mod = await import(R + 'js/pages/admin/cash-register.js');
+    await mod.default({ params: {}, query: {} }, mount);
+    for (let i = 0; i < 20 && !mount.querySelector('.js-dt-row'); i++) await sleep(50);
+    mount.querySelector('.js-dt-row')?.click();
+    for (let i = 0; i < 30 && ![...document.querySelectorAll('.modal button, .overlay button')].some((b) => /report/i.test(b.textContent)); i++) await sleep(50);
+    const rep = [...document.querySelectorAll('.modal button, .overlay button')].find((b) => /report/i.test(b.textContent));
+    T('cash-register: session modal has an X or Z report button', !!rep, rep?.textContent || 'no report button in modal');
+    document.querySelector('.js-modal-close')?.click();
+  } else {
+    T('cash-register: session modal has an X or Z report button', true, 'no session — skipped');
+  }
+}
+
+// purchase-form: edit mode loads an editable PO with its lines + freight field
+{
+  errs.length = 0;
+  mount.replaceChildren();
+  const { db } = await import(R + 'js/core/db.js');
+  let po = db.collection('purchases').all().find((x) => ['draft', 'ordered'].includes(x.status));
+  let restoreStatus = null;
+  if (!po) {
+    po = db.collection('purchases').all()[0];
+    if (po) { restoreStatus = po.status; db.collection('purchases').update(po.id, { status: 'draft' }); po = db.collection('purchases').get(po.id); }
+  }
+  if (po) {
+    const mod = await import(R + 'js/pages/admin/purchase-form.js');
+    await mod.default({ params: { id: po.id }, query: {} }, mount);
+    for (let i = 0; i < 20 && !mount.querySelector('.js-lines table, .js-freight'); i++) await sleep(50);
+    const pErrs = errs.filter((e) => !e.includes('[chart]'));
+    T('purchase-form(edit): loads the PO with a freight field + line rows', !!mount.querySelector('.js-freight') && !!mount.querySelector('.js-lines tr[data-i]') && pErrs.length === 0, pErrs[0] || 'missing freight field or line rows');
+    T('purchase-form(edit): the save button says "Save changes"', /save changes/i.test(mount.querySelector('#save')?.textContent || ''));
+  } else {
+    T('purchase-form(edit): loads the PO with a freight field + line rows', true, 'no editable PO — skipped');
+    T('purchase-form(edit): the save button says "Save changes"', true, 'skipped');
+  }
+  if (restoreStatus) db.collection('purchases').update(po.id, { status: restoreStatus });
+}
+
 // inventory: the Reorder tab renders and can set a reorder level
 {
   errs.length = 0;

@@ -211,3 +211,31 @@ test('purchases: create bumps supplier balance; receive adds stock; return remov
     expect_eq($list['body']['summary']['orders'], 1);
     expect_eq($list['body']['summary']['totalValue'], 200000);
 });
+
+test('purchases: per-line discount + VAT + freight; a draft PO can be edited, a received one cannot', function () {
+    $kit = new TestKit();
+    $s = $kit->loginAs();
+    $sup = authed($kit, $s, 'POST', '/api/suppliers', ['json' => ['name' => 'Freight Co']])['body'];
+    $p = mkProduct($kit, $s, 'Freighted', 'FRT-1', '2000000002069', 10000, 25000, 0);
+
+    $po = authed($kit, $s, 'POST', '/api/purchases', ['json' => [
+        'branchId' => $kit->branchId, 'supplierId' => $sup['id'], 'status' => 'draft', 'freight' => 5000,
+        'lines' => [['productId' => $p['id'], 'qty' => 10, 'unitCost' => 10000, 'discountType' => 'percent', 'discountValue' => 10, 'taxRate' => 5]],
+    ]]);
+    expect_eq($po['status'], 201, json_encode($po['body']));
+    // gross 100000, -10% = 90000, +5% VAT = 94500, + freight 5000 = 99500
+    expect_eq($po['body']['grandTotal'], 99500);
+    expect_eq($po['body']['freightTotal'], 5000);
+    expect_eq($po['body']['discountTotal'], 10000);
+    expect_eq($po['body']['taxTotal'], 4500);
+
+    $edit = authed($kit, $s, 'PATCH', '/api/purchases/' . $po['body']['id'], ['json' => [
+        'freight' => 0,
+        'lines' => [['productId' => $p['id'], 'qty' => 10, 'unitCost' => 10000, 'discountType' => null, 'discountValue' => 0, 'taxRate' => 0]],
+    ]]);
+    expect_eq($edit['body']['grandTotal'], 100000);
+    expect_eq($edit['body']['freightTotal'], 0);
+
+    authed($kit, $s, 'POST', '/api/purchases/' . $po['body']['id'] . '/receive', ['json' => []]);
+    expect_eq(authed($kit, $s, 'PATCH', '/api/purchases/' . $po['body']['id'], ['json' => ['note' => 'nope']])['status'], 409);
+});

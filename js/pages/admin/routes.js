@@ -16,6 +16,7 @@ export const PAGE_ROUTES = [
   { path: '/stock-transfers', permission: 'inventory.transfer', title: 'Stock Transfers', load: () => import('./stock-transfers.js') },
   { path: '/purchases', permission: 'purchases.view', title: 'Purchases', load: () => import('./purchases.js') },
   { path: '/purchases/new', permission: 'purchases.create', title: 'New Purchase', load: () => import('./purchase-form.js') },
+  { path: '/purchases/:id/edit', permission: 'purchases.edit', title: 'Edit Purchase', load: () => import('./purchase-form.js') },
   { path: '/purchases/:id', permission: 'purchases.view', title: 'Purchase', load: () => import('./purchase-detail.js') },
   { path: '/purchase-returns', permission: 'purchases.return', title: 'Purchase Returns', load: () => import('./purchase-returns.js') },
   { path: '/suppliers', permission: 'purchases.view', title: 'Suppliers', load: () => import('./suppliers.js') },

@@ -156,6 +156,23 @@ await step('purchasing', async () => {
   const full = await http.get('/purchases', { params: { pageSize: 'all', from: '2000-01-01' } });
   T('purchases summary is whole-set (not page 1)', pg.summary && pg.summary.orders === full.total && pg.data.length === 1);
   T('purchases summary totals match the full list', pg.summary.totalValue === (full.data || []).reduce((s, r) => s + r.grandTotal, 0));
+
+  // per-line discount + VAT + freight, and editing a draft PO
+  const po2 = await http.post('/purchases', {
+    branchId: B, supplierId: sup.id, status: 'draft', freight: 5000,
+    lines: [{ productId: np.id, qty: 10, unitCost: 10000, discountType: 'percent', discountValue: 10, taxRate: 5 }],
+  });
+  // gross 100000, -10% = 90000, +5% VAT = 94500, + freight 5000 = 99500
+  T('purchase math: line discount + VAT + freight', po2.grandTotal === 99500 && po2.freightTotal === 5000 && po2.discountTotal === 10000 && po2.taxTotal === 4500, JSON.stringify({ g: po2.grandTotal, f: po2.freightTotal }));
+  const edited = await http.patch('/purchases/' + po2.id, {
+    freight: 0,
+    lines: [{ ...po2.lines[0], qty: 10, discountValue: 0, discountType: null, taxRate: 0 }],
+  });
+  T('editing a draft PO recomputes the total', edited.grandTotal === 100000 && edited.freightTotal === 0);
+  await http.post('/purchases/' + po2.id + '/receive', {});
+  let editBlocked = false;
+  try { await http.patch('/purchases/' + po2.id, { note: 'nope' }); } catch (e) { editBlocked = e.status === 409; }
+  T('a received PO can no longer be edited', editBlocked);
 });
 
 // ---- people / finance / org ----
@@ -172,8 +189,18 @@ await step('register', async () => {
   if (cur?.id) await http.post('/cash-register/sessions/' + cur.id + '/close', { countedCash: cur.openingCash || 0 });
   const reg = await http.post('/cash-register/open', { branchId: B, openingCash: 300000 });
   await http.post('/cash-register/sessions/' + reg.id + '/movements', { direction: 'in', amount: 10000, reason: 'cash_in' });
+  // X-report data: the still-open session exposes live totals without being closed
+  const xData = await http.get('/cash-register/sessions/' + reg.id);
+  T('open session exposes X-report figures (expected + cash sales)', typeof xData.expectedCash === 'number' && typeof xData.cashSales === 'number' && xData.status === 'open');
+
   const closed = await http.post('/cash-register/sessions/' + reg.id + '/close', { countedCash: 310000 });
   T('register close computes expected vs counted', closed.difference === 0, 'diff ' + closed.difference);
+  T('close returns Z-report fields (closingExpectedCash + difference)', typeof closed.closingExpectedCash === 'number' && closed.difference === 0);
+
+  // blind-close setting round-trips through /settings
+  await http.put('/settings', { pos: { blindClose: true } });
+  T('pos.blindClose persists', (await http.get('/settings')).pos.blindClose === true);
+  await http.put('/settings', { pos: { blindClose: false } });
 
   const rs = await http.get('/cash-register/sessions', { params: { pageSize: 1 } });
   const rsAll = await http.get('/cash-register/sessions', { params: { pageSize: 'all' } });

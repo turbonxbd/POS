@@ -104,7 +104,7 @@ final class Purchasing
 
     /* ------------------------------------------------------------ purchases */
 
-    private static function computePurchase(array $lines): array
+    private static function computePurchase(array $lines, int $freight = 0): array
     {
         $subtotal = 0;
         $discountTotal = 0;
@@ -125,7 +125,11 @@ final class Purchasing
                 'lineTotal' => $net + $tax, 'receivedQty' => $l['receivedQty'] ?? 0, 'returnedQty' => $l['returnedQty'] ?? 0,
             ]);
         }, $lines);
-        return ['items' => $items, 'subtotal' => $subtotal, 'discountTotal' => $discountTotal, 'taxTotal' => $taxTotal, 'grandTotal' => $subtotal - $discountTotal + $taxTotal];
+        $freightTotal = max(0, $freight);
+        return [
+            'items' => $items, 'subtotal' => $subtotal, 'discountTotal' => $discountTotal, 'taxTotal' => $taxTotal,
+            'freightTotal' => $freightTotal, 'grandTotal' => $subtotal - $discountTotal + $taxTotal + $freightTotal,
+        ];
     }
 
     private static function decorate(Context $ctx, array $p): array
@@ -177,7 +181,7 @@ final class Purchasing
         if (empty($b['lines'])) {
             throw HttpError::badRequest('Add at least one product line', ['lines' => 'Required']);
         }
-        $calc = self::computePurchase($b['lines']);
+        $calc = self::computePurchase($b['lines'], (int) ($b['freight'] ?? 0));
         $paid = (int) ($b['paidTotal'] ?? 0);
         if ($paid > $calc['grandTotal']) {
             throw HttpError::badRequest('Paid amount exceeds the purchase total');
@@ -190,7 +194,7 @@ final class Purchasing
                 'id' => $id, 'reference' => $ref, 'branchId' => $branch['id'], 'supplierId' => $supplier['id'],
                 'invoiceRef' => $b['invoiceRef'] ?? '', 'note' => $b['note'] ?? '',
                 'lines' => $calc['items'], 'subtotal' => $calc['subtotal'], 'discountTotal' => $calc['discountTotal'],
-                'taxTotal' => $calc['taxTotal'], 'grandTotal' => $calc['grandTotal'],
+                'taxTotal' => $calc['taxTotal'], 'freightTotal' => $calc['freightTotal'], 'grandTotal' => $calc['grandTotal'],
                 'paidTotal' => $paid, 'dueTotal' => $calc['grandTotal'] - $paid, 'status' => $status,
                 'expectedAt' => $b['expectedAt'] ?? null, 'createdAt' => Clock::now(), 'receivedAt' => null,
             ];
@@ -211,11 +215,13 @@ final class Purchasing
         $b = $ctx->body();
         return $ctx->db->transaction(function () use ($ctx, $p, $existing, $b) {
             $patch = $b;
+            unset($patch['freight']);
             if (!empty($b['lines'])) {
-                $calc = self::computePurchase($b['lines']);
+                $freight = (int) ($b['freight'] ?? $existing['freightTotal'] ?? 0);
+                $calc = self::computePurchase($b['lines'], $freight);
                 $patch = array_merge($patch, [
                     'lines' => $calc['items'], 'subtotal' => $calc['subtotal'], 'discountTotal' => $calc['discountTotal'],
-                    'taxTotal' => $calc['taxTotal'], 'grandTotal' => $calc['grandTotal'],
+                    'taxTotal' => $calc['taxTotal'], 'freightTotal' => $calc['freightTotal'], 'grandTotal' => $calc['grandTotal'],
                     'dueTotal' => $calc['grandTotal'] - ($b['paidTotal'] ?? $existing['paidTotal']),
                 ]);
             }

@@ -12,7 +12,7 @@ import money from '../../utils/money.js';
 import { now } from '../../utils/date.js';
 import { uuid } from '../../utils/id.js';
 
-function computePurchase(lines) {
+function computePurchase(lines, freight = 0) {
   let subtotal = 0;
   let discountTotal = 0;
   let taxTotal = 0;
@@ -27,7 +27,8 @@ function computePurchase(lines) {
     taxTotal += tax;
     return { ...l, id: l.id || uuid(), qty, gross, discount: disc, tax, lineTotal: net + tax, receivedQty: l.receivedQty || 0, returnedQty: l.returnedQty || 0 };
   });
-  return { items, subtotal, discountTotal, taxTotal, grandTotal: subtotal - discountTotal + taxTotal };
+  const freightTotal = Math.max(0, Math.trunc(freight || 0));
+  return { items, subtotal, discountTotal, taxTotal, freightTotal, grandTotal: subtotal - discountTotal + taxTotal + freightTotal };
 }
 
 function decoratePurchase(p) {
@@ -120,7 +121,7 @@ export default function register(router) {
     const supplier = tdb('suppliers').get(body?.supplierId);
     if (!supplier) badRequest('Select a supplier', { supplierId: 'Required' });
     if (!body.lines?.length) badRequest('Add at least one product line', { lines: 'Required' });
-    const calc = computePurchase(body.lines);
+    const calc = computePurchase(body.lines, body.freight);
     const paidTotal = Math.trunc(body.paidTotal || 0);
     if (paidTotal > calc.grandTotal) badRequest('Paid amount exceeds the purchase total');
 
@@ -131,7 +132,7 @@ export default function register(router) {
         id: uuid(), reference: ref, branchId: branch.id, supplierId: supplier.id,
         invoiceRef: body.invoiceRef || '', note: body.note || '',
         lines: calc.items, subtotal: calc.subtotal, discountTotal: calc.discountTotal,
-        taxTotal: calc.taxTotal, grandTotal: calc.grandTotal,
+        taxTotal: calc.taxTotal, freightTotal: calc.freightTotal, grandTotal: calc.grandTotal,
         paidTotal, dueTotal: calc.grandTotal - paidTotal, status,
         expectedAt: body.expectedAt || null, createdAt: now(), receivedAt: null,
       });
@@ -146,10 +147,12 @@ export default function register(router) {
     const existing = tdb('purchases').get(params.id);
     if (!existing) notFound('Purchase');
     if (['received', 'cancelled'].includes(existing.status)) conflict(`A ${existing.status} purchase cannot be edited.`);
-    const calc = body.lines ? computePurchase(body.lines) : null;
+    const freight = body.freight ?? existing.freightTotal ?? 0;
+    const calc = body.lines ? computePurchase(body.lines, freight) : null;
     return db.tx(() => {
       const patch = { ...body };
-      if (calc) Object.assign(patch, { lines: calc.items, subtotal: calc.subtotal, discountTotal: calc.discountTotal, taxTotal: calc.taxTotal, grandTotal: calc.grandTotal, dueTotal: calc.grandTotal - (body.paidTotal ?? existing.paidTotal) });
+      delete patch.freight;
+      if (calc) Object.assign(patch, { lines: calc.items, subtotal: calc.subtotal, discountTotal: calc.discountTotal, taxTotal: calc.taxTotal, freightTotal: calc.freightTotal, grandTotal: calc.grandTotal, dueTotal: calc.grandTotal - (body.paidTotal ?? existing.paidTotal) });
       const row = tdb('purchases').update(params.id, patch);
       audit('update', 'purchase', row.id, { before: existing, after: row });
       return ok(decoratePurchase(row));
