@@ -1,8 +1,10 @@
 # POS TXbd - Apache / LiteSpeed rules for the public web root (public_html).
 #
-# 1. Route /api/* to the PHP front controller.
-# 2. Serve the static SPA: unknown non-file paths fall back to index.html.
-# 3. Deny access to anything sensitive that might end up in the web root.
+# 1. Force HTTPS (the session cookie is Secure).
+# 2. Route /api/* to the PHP front controller.
+# 3. Serve the static SPA: unknown non-file paths fall back to index.html.
+# 4. Keep the service worker + manifest fresh so app updates land.
+# 5. Deny access to anything sensitive that might end up in the web root.
 
 Options -Indexes
 DirectoryIndex index.html
@@ -10,11 +12,17 @@ DirectoryIndex index.html
 <IfModule mod_rewrite.c>
   RewriteEngine On
 
-  # --- API ---------------------------------------------------------------
+  # --- Force HTTPS ------------------------------------------------------------
+  # Hostinger's own "Force HTTPS" toggle also does this; harmless if both are on.
+  RewriteCond %{HTTPS} !=on
+  RewriteCond %{HTTP:X-Forwarded-Proto} !https
+  RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]
+
+  # --- API -----------------------------------------------------------------
   # /api and /api/anything  ->  /api/index.php  (query string preserved)
   RewriteRule ^api(/.*)?$ api/index.php [L,QSA]
 
-  # --- Static SPA fallback ---------------------------------------------------
+  # --- Static SPA fallback -------------------------------------------------
   # If the request is not an existing file or directory, and not /api,
   # serve the app shell so client-side routing (hash + history) works.
   RewriteCond %{REQUEST_FILENAME} !-f
@@ -23,8 +31,16 @@ DirectoryIndex index.html
   RewriteRule ^ index.html [L]
 </IfModule>
 
-# --- Block sensitive files even if they are uploaded here by mistake -------
-<FilesMatch "(^\.|\.(sql|sqlite|db|log|ini|sh|bak|old|dist|lock)$|composer\.(json|lock)|package(-lock)?\.json)">
+# --- MIME types (older Apache builds miss these) --------------------------
+<IfModule mod_mime.c>
+  AddType application/manifest+json .webmanifest
+  AddType text/javascript .js .mjs
+  AddType image/svg+xml .svg
+  AddType font/woff2 .woff2
+</IfModule>
+
+# --- Block sensitive files even if they are uploaded here by mistake -----
+<FilesMatch "(^\.(?!well-known)|\.(sql|sqlite|db|log|ini|sh|bak|old|dist|lock)$|composer\.(json|lock)|package(-lock)?\.json)">
   Require all denied
 </FilesMatch>
 
@@ -32,14 +48,25 @@ DirectoryIndex index.html
   Header always set X-Content-Type-Options "nosniff"
   Header always set X-Frame-Options "SAMEORIGIN"
   Header always set Referrer-Policy "strict-origin-when-cross-origin"
+
+  # The service worker and manifest carry app updates - never let a CDN or the
+  # browser hold a stale copy.
+  <FilesMatch "(service-worker\.js|manifest\.webmanifest)$">
+    Header set Cache-Control "no-cache, no-store, must-revalidate"
+    Header set Pragma "no-cache"
+    Header set Expires "0"
+  </FilesMatch>
 </IfModule>
 
 # Long-cache the fingerprint-free static assets modestly; HTML stays fresh.
+# (service-worker.js / manifest.webmanifest are forced no-cache above.)
 <IfModule mod_expires.c>
   ExpiresActive On
-  ExpiresByType text/css "access plus 7 days"
-  ExpiresByType application/javascript "access plus 7 days"
+  ExpiresByType text/css "access plus 2 days"
+  ExpiresByType text/javascript "access plus 2 days"
+  ExpiresByType application/javascript "access plus 2 days"
   ExpiresByType image/svg+xml "access plus 30 days"
+  ExpiresByType image/png "access plus 30 days"
   ExpiresByType font/woff2 "access plus 30 days"
   ExpiresByType text/html "access plus 0 seconds"
 </IfModule>

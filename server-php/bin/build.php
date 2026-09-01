@@ -10,13 +10,27 @@
  * The frontend is copied from the repo root and gets window.__AFIA_ENV__
  * injected so it talks to /api. The source repo is left untouched.
  *
- *   php bin/build.php
+ *   php bin/build.php [--domain https://pos.yourdomain.com]
+ *
+ * --domain rewrites the canonical / og:url / JSON-LD links (SEO). Optional.
+ * (A Node version with the same behaviour is server-php/build-dist.mjs.)
  */
 declare(strict_types=1);
 
 $root = dirname(__DIR__, 2);          // repo root (…/POS)
 $server = dirname(__DIR__);            // …/POS/server-php
 $dist = $server . '/dist';
+
+$argsv = $argv ?? [];
+$domain = '';
+foreach ($argsv as $i => $a) {
+    if ($a === '--domain' && isset($argsv[$i + 1])) {
+        $domain = rtrim($argsv[$i + 1], '/');
+    }
+}
+if ($domain !== '' && !preg_match('~^https?://~', $domain)) {
+    $domain = 'https://' . $domain;
+}
 
 $rrmdir = static function (string $dir) use (&$rrmdir) {
     if (!is_dir($dir)) {
@@ -50,23 +64,27 @@ $rrmdir($dist);
 
 /* ---- public_html: static frontend ---- */
 $pub = "$dist/public_html";
-$frontend = ['index.html', 'portal.html', 'login.html', 'admin.html', 'cashier.html', 'superadmin.html', '404.html',
-    'manifest.webmanifest', 'service-worker.js', '.nojekyll', 'css', 'js', 'assets', 'data'];
+$frontend = ['index.html', 'portal.html', 'login.html', 'admin.html', 'cashier.html', 'superadmin.html',
+    'privacy.html', 'terms.html', '404.html',
+    'manifest.webmanifest', 'service-worker.js', '.nojekyll', 'css', 'js', 'assets'];
 foreach ($frontend as $item) {
     if (file_exists("$root/$item")) {
         $copy("$root/$item", "$pub/$item");
     }
 }
 
-/* inject the rest-mode env into every HTML entry point */
-$env = json_encode(['APP_DATA_MODE' => 'rest', 'APP_API_BASE_URL' => '/api', 'APP_ENABLE_PWA' => 'false']);
+/* inject the rest-mode env + fix canonical URLs in every HTML entry point */
+$env = json_encode(['APP_DATA_MODE' => 'rest', 'APP_API_BASE_URL' => '/api', 'APP_ENABLE_PWA' => 'true']);
 $tag = "<script>window.__AFIA_ENV__=$env;</script>";
+$oldSite = 'https://turbonxbd.github.io/POS';
 foreach (glob("$pub/*.html") as $html) {
     $c = file_get_contents($html);
-    if (str_contains($c, '__AFIA_ENV__')) {
-        continue;
+    if (!str_contains($c, '__AFIA_ENV__')) {
+        $c = preg_replace('/<head(\s[^>]*)?>/i', "$0\n  $tag", $c, 1);
     }
-    $c = preg_replace('/<head(\s[^>]*)?>/i', "$0\n  $tag", $c, 1);
+    if ($domain !== '') {
+        $c = str_replace($oldSite, $domain, $c);
+    }
     file_put_contents($html, $c);
 }
 

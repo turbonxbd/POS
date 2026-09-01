@@ -65,12 +65,23 @@ frontend only needs `APP_DATA_MODE=rest` + `APP_API_BASE_URL=/api`, which
 
 ## Deploy to Hostinger — step by step
 
+> **The full walkthrough is [`../DEPLOY.md`](../DEPLOY.md)** (custom domain, SSL,
+> phpMyAdmin vs SSH, verification checklist, updating). This section is the short
+> version.
+
 ### 1. Build the upload bundle (on your computer)
 
 ```bash
-cd server-php
-php bin/build.php          # writes ./dist
+# Node (no PHP needed - Windows-friendly):
+node server-php/build-dist.mjs --domain https://pos.yourdomain.com
+
+# …or PHP:
+php server-php/bin/build.php --domain https://pos.yourdomain.com
 ```
+
+`--domain` rewrites the canonical / og:url / JSON-LD links (SEO); optional.
+The build wires **rest mode** (`APP_DATA_MODE=rest`, `APP_API_BASE_URL=/api`) and
+**enables the installable PWA** (`APP_ENABLE_PWA=true`).
 
 `dist/` contains:
 - `public_html/` — the static site + `api/` + `.htaccess` (rest-mode wired in)
