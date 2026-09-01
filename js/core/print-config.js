@@ -78,10 +78,10 @@ export const DEFAULT_INVOICE = {
   pageHeightAuto: true, // let the page grow to fit the content (thermal rolls) - no blank pages
   unit: 'in', // mm | in
 
-  // orientation mirrors the driver's Orientation radio (see ORIENTATIONS). Set
-  // it to the SAME value the driver uses; printRotation is derived from it in
-  // invoiceConfig() (a saved printRotation still wins). 180 = printer mounted so
-  // the paper feeds out flipped.
+  // Extra rotation for the physical print, almost always 0. The printer driver
+  // owns orientation ("Portrait 180" etc. in Printing Preferences) - the page is
+  // always sent upright. `orientation` is kept only so an older saved value
+  // still resolves via degToOrientation() in invoiceConfig().
   orientation: 'portrait',
   printRotation: 0,
 
