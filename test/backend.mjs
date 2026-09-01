@@ -315,6 +315,22 @@ await step('coupons + automatic discounts', async () => {
   const s2 = await http.post('/sales', { branchId: B, items: [{ productId: P.id, qty: 2 }], payments: [{ method: 'cash', amount: 18000 }] });
   T('automatic discount applied with no code (200.00 - 10%)', s2.grandTotal === 18000, String(s2.grandTotal));
   T('sale records the automatic discount', s2.autoDiscount === 2000 && /Auto 10%/.test(s2.autoDiscountName || ''), `${s2.autoDiscount}/${s2.autoDiscountName}`);
+
+  // scoped (product) discount only touches the products it names
+  for (const d of (await http.get('/discounts', { params: { pageSize: 'all' } })).data.filter((x) => !x.archivedAt)) await http.del('/discounts/' + d.id);
+  const A = await http.post('/products', { branchId: B, name: 'QA Scoped A', sellingPrice: 10000, costPrice: 4000, unit: 'pcs', openingStock: 30, minStock: 1 });
+  const Bp = await http.post('/products', { branchId: B, name: 'QA Scoped B', sellingPrice: 10000, costPrice: 4000, unit: 'pcs', openingStock: 30, minStock: 1 });
+  await http.post('/discounts', { name: 'A only 20%', type: 'percent', value: 20, scope: 'product', appliesTo: [A.id], status: 'active' });
+  const s3 = await http.post('/sales', { branchId: B, items: [{ productId: A.id, qty: 1 }, { productId: Bp.id, qty: 1 }], payments: [{ method: 'cash', amount: 18000 }] });
+  // A: 100 - 20% = 80 ; B untouched 100 -> grand 180.00 ; auto discount = 20.00
+  T('product-scoped auto discount only discounts the named product', s3.grandTotal === 18000 && s3.autoDiscount === 2000, `${s3.grandTotal}/${s3.autoDiscount}`);
+
+  // a product-scoped coupon on a cart with none of its products is rejected
+  await http.post('/discounts', { name: 'A coupon', code: 'aonly', type: 'percent', value: 15, scope: 'product', appliesTo: [A.id], status: 'active' });
+  let scopedBad = false;
+  try { await http.post('/sales', { branchId: B, items: [{ productId: Bp.id, qty: 1 }], couponCode: 'AONLY', payments: [{ method: 'cash', amount: 10000 }] }); }
+  catch (e) { scopedBad = e.status === 422 || e.status === 400; }
+  T('a product-scoped coupon is rejected when no matching product is in the cart', scopedBad);
 });
 
 // ---- fixed-amount VAT (a flat fee on every sale) ----

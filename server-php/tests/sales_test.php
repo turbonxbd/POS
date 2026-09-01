@@ -198,6 +198,38 @@ test('checkout: coupon code + automatic discount apply to the total', function (
     expect_eq($s2['body']['autoDiscount'], 2000);
 });
 
+test('checkout: a product-scoped discount only touches the products it names', function () {
+    $kit = new TestKit();
+    $s = $kit->loginAs();
+    $a = mkProduct($kit, $s, 'Scoped A', 'SCA-1', '2000000009093', 4000, 10000, 30);
+    $b = mkProduct($kit, $s, 'Scoped B', 'SCB-1', '2000000009109', 4000, 10000, 30);
+
+    authed($kit, $s, 'POST', '/api/discounts', ['json' => [
+        'name' => 'A only 20%', 'type' => 'percent', 'value' => 20, 'scope' => 'product', 'appliesTo' => [$a['id']], 'status' => 'active',
+    ]]);
+    $sale = authed($kit, $s, 'POST', '/api/sales', ['json' => [
+        'branchId' => $kit->branchId,
+        'items' => [['productId' => $a['id'], 'qty' => 1], ['productId' => $b['id'], 'qty' => 1]],
+        'payments' => [['method' => 'cash', 'amount' => 18000]],
+    ]]);
+    // A 10000 -20% = 8000 ; B untouched 10000 -> grand 18000 ; auto discount 2000
+    expect_eq($sale['status'], 201, json_encode($sale['body']));
+    expect_eq($sale['body']['grandTotal'], 18000);
+    expect_eq($sale['body']['autoDiscount'], 2000);
+
+    // a product-scoped coupon is rejected when none of its products are in the cart
+    authed($kit, $s, 'POST', '/api/discounts', ['json' => [
+        'name' => 'A coupon', 'code' => 'aonly', 'type' => 'percent', 'value' => 15, 'scope' => 'product', 'appliesTo' => [$a['id']], 'status' => 'active',
+    ]]);
+    $rej = authed($kit, $s, 'POST', '/api/sales', ['json' => [
+        'branchId' => $kit->branchId,
+        'items' => [['productId' => $b['id'], 'qty' => 1]],
+        'couponCode' => 'AONLY',
+        'payments' => [['method' => 'cash', 'amount' => 10000]],
+    ]]);
+    expect_eq($rej['status'], 422);
+});
+
 test('checkout: fixed-amount VAT adds a flat fee to every sale', function () {
     $kit = new TestKit();
     $s = $kit->loginAs();

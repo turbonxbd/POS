@@ -30,6 +30,37 @@ final class Cart
         return max(0, (int) $amt);
     }
 
+    /** Does a cart line fall inside a discount rule's product / category scope? */
+    private static function lineMatchesRule(?array $rule, array $line): bool
+    {
+        $sc = $rule['scope'] ?? null;
+        if (!$sc || $sc === 'cart') {
+            return true;
+        }
+        $list = $rule['appliesTo'] ?? [];
+        if (!$list) {
+            return true;
+        }
+        if ($sc === 'product') {
+            return in_array($line['productId'] ?? null, $list, true);
+        }
+        if ($sc === 'category') {
+            return isset($line['categoryId']) && in_array($line['categoryId'], $list, true);
+        }
+        return true;
+    }
+
+    private static function ruleAmountOn(array $rule, int $base): int
+    {
+        $a = ($rule['type'] ?? null) === 'percent'
+            ? Money::percent($base, (float) ($rule['value'] ?? 0))
+            : Money::toMinor($rule['value'] ?? 0);
+        if (!empty($rule['maxDiscount'])) {
+            $a = min($a, (int) $rule['maxDiscount']);
+        }
+        return max(0, (int) $a);
+    }
+
     /**
      * @param list<array{productId:string,variantId?:?string,name:string,sku?:string,
      *   unitPrice:int,qty:int,discountType?:?string,discountValue?:int|float,taxId?:?string,costPrice?:int}> $lines
@@ -58,8 +89,12 @@ final class Cart
                        'net' => $gross - $lineDiscount];
         }
 
-        // pass 2: cart-level discounts (manual + automatic + coupon) by net weight
-        $netSum = array_sum(array_column($rows, 'net'));
+        // pass 2: cart-level discounts. Order: manual -> best automatic -> coupon,
+        // each clamped to what is left. A scoped (product / category) discount only
+        // draws from the lines it covers; "minimum spend" is against the whole cart.
+        $netByLine = array_column($rows, 'net');
+        $netSum = array_sum($netByLine);
+
         $manualCartDiscount = 0;
         if (($opts['cartDiscountType'] ?? null) === 'percent') {
             $manualCartDiscount = Money::percent($netSum, (float) ($opts['cartDiscountValue'] ?? 0));
@@ -68,23 +103,74 @@ final class Cart
         }
         $manualCartDiscount = min(max(0, $manualCartDiscount), $netSum);
 
-        $remaining = $netSum - $manualCartDiscount;
+        $perLine = Money::distribute($manualCartDiscount, $netByLine);
+        $remainingByLine = [];
+        foreach ($netByLine as $i => $n) {
+            $remainingByLine[$i] = $n - ($perLine[$i] ?? 0);
+        }
+        $applyScoped = static function (array $idx, int $amount) use (&$perLine, &$remainingByLine) {
+            $weights = array_map(static fn ($i) => $remainingByLine[$i], $idx);
+            $shares = Money::distribute($amount, $weights);
+            foreach ($idx as $k => $li) {
+                $perLine[$li] = ($perLine[$li] ?? 0) + $shares[$k];
+                $remainingByLine[$li] -= $shares[$k];
+            }
+        };
+        $scopedIdx = static function (?array $rule) use ($rows) {
+            $out = [];
+            foreach ($rows as $i => $r) {
+                if (self::lineMatchesRule($rule, $r['line'])) {
+                    $out[] = $i;
+                }
+            }
+            return $out;
+        };
+
+        // percentage base = the scoped lines' net BEFORE the manual cart discount
+        // (a cart-scope rule still measures against the full cart); clamp = remainder.
+        $poolOf = static fn (array $idx, array $src) => array_sum(array_map(static fn ($i) => $src[$i], $idx));
+
         $autoDiscount = 0;
         $autoDiscountName = null;
+        $autoIdx = null;
         foreach ($opts['autoDiscounts'] ?? [] as $rule) {
-            $amt = min(self::discountRuleAmount($rule, $netSum), $remaining);
+            if (!empty($rule['minSpend']) && $netSum < (int) $rule['minSpend']) {
+                continue;
+            }
+            $idx = $scopedIdx($rule);
+            $pool = $poolOf($idx, $remainingByLine);
+            if ($pool <= 0) {
+                continue;
+            }
+            $amt = min(self::ruleAmountOn($rule, $poolOf($idx, $netByLine)), $pool);
             if ($amt > $autoDiscount) {
                 $autoDiscount = $amt;
                 $autoDiscountName = $rule['name'] ?? 'Automatic discount';
+                $autoIdx = $idx;
             }
         }
-        $remaining -= $autoDiscount;
+        if ($autoIdx !== null) {
+            $applyScoped($autoIdx, $autoDiscount);
+        }
 
-        $couponDiscount = min(self::discountRuleAmount($opts['coupon'] ?? null, $netSum), $remaining);
-        $couponCode = $couponDiscount > 0 ? ($opts['coupon']['code'] ?? null) : null;
+        $couponDiscount = 0;
+        $couponCode = null;
+        $coupon = $opts['coupon'] ?? null;
+        if ($coupon && !(!empty($coupon['minSpend']) && $netSum < (int) $coupon['minSpend'])) {
+            $idx = $scopedIdx($coupon);
+            $pool = $poolOf($idx, $remainingByLine);
+            if ($idx && $pool > 0) {
+                $amt = min(self::ruleAmountOn($coupon, $poolOf($idx, $netByLine)), $pool);
+                if ($amt > 0) {
+                    $couponDiscount = $amt;
+                    $couponCode = $coupon['code'] ?? null;
+                    $applyScoped($idx, $amt);
+                }
+            }
+        }
 
         $cartDiscount = $manualCartDiscount + $autoDiscount + $couponDiscount;
-        $shares = Money::distribute($cartDiscount, array_column($rows, 'net'));
+        $shares = $perLine;
 
         // pass 3: tax per line
         $subtotal = 0;

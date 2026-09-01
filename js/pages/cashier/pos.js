@@ -31,18 +31,18 @@ import bus from '../../core/event-bus.js';
 const checkoutMutex = createMutex();
 
 /** Discounts that apply themselves to the cart: active, no coupon code, within
- *  their date window, cart scope. */
+ *  their date window. Scope (cart / product / category) is honoured by
+ *  computeCart against the actual cart lines. */
 function activeAutoDiscounts(list) {
   const t = Date.now();
   return (list || []).filter((d) =>
     !d.code &&
     (d.status ? d.status === 'active' : true) &&
     !d.archivedAt &&
-    (d.scope == null || d.scope === 'cart') &&
     (!d.startsAt || new Date(d.startsAt).getTime() <= t) &&
     (!d.endsAt || new Date(d.endsAt).getTime() >= t) &&
     (!d.usageLimit || (d.usageCount || 0) < d.usageLimit),
-  );
+  ).map((d) => ({ ...d, scope: d.scope || 'cart', appliesTo: d.appliesTo || [] }));
 }
 
 export async function renderPOS(mount, { onNeedRegister } = {}) {
@@ -357,6 +357,7 @@ export async function renderPOS(mount, { onNeedRegister } = {}) {
         id: d.id, code, name: d.name || null,
         type: res.type || d.type, value: res.value ?? d.value,
         minSpend: d.minSpend || 0, maxDiscount: d.maxDiscount || 0,
+        scope: d.scope || 'cart', appliesTo: d.appliesTo || [],
       });
       toast.success(`Coupon ${code} applied`);
       els.couponInput.value = '';

@@ -129,6 +129,30 @@ for (const [name, path, ctx] of [
   } catch (e) { T(name, false, 'THREW: ' + e.message); }
 }
 
+// discounts: the New Discount form reveals a product picker when scope = product
+{
+  errs.length = 0;
+  mount.replaceChildren();
+  const mod = await import(R + 'js/pages/admin/discounts.js');
+  await mod.default({ params: {}, query: {} }, mount);
+  for (let i = 0; i < 20 && ![...mount.querySelectorAll('button, a')].some((b) => /new discount/i.test(b.textContent)); i++) await sleep(50);
+  const newBtn = [...mount.querySelectorAll('button, a')].find((b) => /new discount/i.test(b.textContent));
+  newBtn?.click();
+  for (let i = 0; i < 20 && !document.querySelector('.modal select[name="scope"], .modal [data-multi]'); i++) await sleep(50);
+  const scopeSel = document.querySelector('.modal select[name="scope"]');
+  T('discounts: form has a scope select', !!scopeSel, scopeSel ? '' : 'no scope select');
+  if (scopeSel) {
+    scopeSel.value = 'product';
+    scopeSel.dispatchEvent(new window.Event('change', { bubbles: true }));
+    await sleep(80);
+    const picker = document.querySelector('.modal [data-multi="appliesToProducts"]');
+    T('discounts: choosing "product" reveals a product multiselect', !!picker, picker ? '' : 'no product picker');
+  } else {
+    T('discounts: choosing "product" reveals a product multiselect', true, 'skipped');
+  }
+  document.querySelector('.js-modal-close')?.click();
+}
+
 // product-detail: the "Add Stock" flow adds to a branch's on-hand quantity
 {
   errs.length = 0;

@@ -36,17 +36,20 @@ function activeDiscounts() {
   );
 }
 
-/** Auto (no-code) cart-scope discounts + the coupon rule for `code`, if valid. */
+/** Auto (no-code) discounts + the coupon rule for `code`, if valid. Scope
+ *  (cart / product / category) is honoured downstream by computeCart. */
 function resolveCartDiscounts(code) {
   const all = activeDiscounts();
-  const autoDiscounts = all.filter((d) => !d.code && (d.scope == null || d.scope === 'cart') && (!d.usageLimit || (d.usageCount || 0) < d.usageLimit));
+  const autoDiscounts = all
+    .filter((d) => !d.code && (!d.usageLimit || (d.usageCount || 0) < d.usageLimit))
+    .map((d) => ({ id: d.id, name: d.name, type: d.type, value: d.value, minSpend: d.minSpend || 0, maxDiscount: d.maxDiscount || 0, scope: d.scope || 'cart', appliesTo: d.appliesTo || [] }));
   let coupon = null;
   const wanted = String(code || '').trim().toUpperCase();
   if (wanted) {
     const d = all.find((x) => x.code && x.code.toUpperCase() === wanted);
     if (!d) badRequest(`Coupon "${wanted}" is no longer valid.`);
     if (d.usageLimit && (d.usageCount || 0) >= d.usageLimit) conflict('This coupon has reached its usage limit.');
-    coupon = { id: d.id, code: d.code, name: d.name, type: d.type, value: d.value, minSpend: d.minSpend || 0, maxDiscount: d.maxDiscount || 0 };
+    coupon = { id: d.id, code: d.code, name: d.name, type: d.type, value: d.value, minSpend: d.minSpend || 0, maxDiscount: d.maxDiscount || 0, scope: d.scope || 'cart', appliesTo: d.appliesTo || [] };
   }
   return { autoDiscounts, coupon };
 }
@@ -69,6 +72,7 @@ function buildCartLines(rawItems, branchId) {
     return {
       productId: product.id,
       variantId: variant?.id || null,
+      categoryId: product.categoryId || null,
       name: product.name,
       variantLabel: variant ? variantName(product, variant.id) : null,
       sku: variant ? variant.sku : product.sku,

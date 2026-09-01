@@ -655,9 +655,12 @@ final class Sales
     private static function resolveCartDiscounts(Context $ctx, ?string $code): array
     {
         $all = self::activeDiscounts($ctx);
-        $auto = array_values(array_filter($all, static fn (array $d) => empty($d['code'])
-            && (($d['scope'] ?? 'cart') === 'cart')
-            && (empty($d['usageLimit']) || ($d['usageCount'] ?? 0) < $d['usageLimit'])));
+        $auto = array_values(array_map(static fn (array $d) => [
+            'id' => $d['id'], 'name' => $d['name'] ?? null, 'type' => $d['type'], 'value' => $d['value'],
+            'minSpend' => $d['minSpend'] ?? 0, 'maxDiscount' => $d['maxDiscount'] ?? 0,
+            'scope' => $d['scope'] ?? 'cart', 'appliesTo' => $d['appliesTo'] ?? [],
+        ], array_filter($all, static fn (array $d) => empty($d['code'])
+            && (empty($d['usageLimit']) || ($d['usageCount'] ?? 0) < $d['usageLimit']))));
 
         $coupon = null;
         $wanted = strtoupper(trim((string) $code));
@@ -678,6 +681,7 @@ final class Sales
                 'id' => $match['id'], 'code' => $match['code'], 'name' => $match['name'] ?? null,
                 'type' => $match['type'], 'value' => $match['value'],
                 'minSpend' => $match['minSpend'] ?? 0, 'maxDiscount' => $match['maxDiscount'] ?? 0,
+                'scope' => $match['scope'] ?? 'cart', 'appliesTo' => $match['appliesTo'] ?? [],
             ];
         }
         return ['autoDiscounts' => $auto, 'coupon' => $coupon];
@@ -713,6 +717,7 @@ final class Sales
             $unitPrice = isset($it['unitPriceOverride']) ? max(0, (int) $it['unitPriceOverride']) : $basePrice;
             $out[] = [
                 'productId' => $product['id'], 'variantId' => $variant['id'] ?? null, 'name' => $product['name'],
+                'categoryId' => $product['categoryId'] ?? null,
                 'variantLabel' => $variant ? ($variant['name'] ?: $variant['sku']) : null,
                 'sku' => $variant['sku'] ?? $product['sku'], 'barcode' => $variant['barcode'] ?? $product['barcode'],
                 'unit' => $product['unit'] ?? 'pcs', 'unitPrice' => (int) $unitPrice,

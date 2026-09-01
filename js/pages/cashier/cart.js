@@ -81,6 +81,7 @@ export class Cart {
         productId: product.id,
         variantId: variant?.id || null,
         name: product.name,
+        categoryId: product.categoryId || null,
         variantLabel: variant ? (variant.name || Object.values(variant.options || {}).join(' / ')) : null,
         sku: variant?.sku || product.sku,
         unitPrice: variant ? variant.sellingPrice : (product.discountPrice ?? product.sellingPrice),
@@ -195,7 +196,7 @@ export class Cart {
   compute() {
     return computeCart(
       this.#lines.map((l) => ({
-        productId: l.productId, variantId: l.variantId, name: l.name, sku: l.sku,
+        productId: l.productId, variantId: l.variantId, name: l.name, sku: l.sku, categoryId: l.categoryId,
         unitPrice: l.unitPrice, costPrice: l.costPrice, qty: l.qty,
         discountType: l.discountType, discountValue: l.discountValue, taxId: l.taxId,
       })),

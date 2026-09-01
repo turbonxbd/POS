@@ -245,6 +245,22 @@ export function discountRuleAmount(rule, base) {
 }
 
 /**
+ * Does a cart line fall inside a discount rule's scope?
+ *   scope 'cart' / unset / empty appliesTo -> every line
+ *   scope 'product'  -> line.productId is in rule.appliesTo
+ *   scope 'category' -> line.categoryId is in rule.appliesTo
+ */
+export function lineMatchesRule(rule, line) {
+  const sc = rule?.scope;
+  if (!sc || sc === 'cart') return true;
+  const list = rule.appliesTo || [];
+  if (!list.length) return true;
+  if (sc === 'product') return list.includes(line.productId);
+  if (sc === 'category') return line.categoryId != null && list.includes(line.categoryId);
+  return true;
+}
+
+/**
  * computeCart(lines, opts) -> full monetary breakdown.
  * line: { productId, variantId?, name, sku, unitPrice(minor), qty,
  *         discountType?('percent'|'fixed'), discountValue?, taxId?, costPrice?(minor) }
@@ -268,28 +284,61 @@ export function computeCart(lines, opts = {}) {
     rounded.push({ ...line, qty, gross, lineDiscount, netAfterLineDiscount: gross - lineDiscount });
   }
 
-  // Pass 2: cart-level discounts (manual + automatic + coupon), distributed
-  // across lines by net weight for a fair tax base.
-  const netSum = rounded.reduce((s, l) => s + l.netAfterLineDiscount, 0);
+  // Pass 2: cart-level discounts. Order: manual cart discount -> best automatic
+  // discount -> coupon, each clamped to what is left. A discount whose scope is a
+  // product / category only draws from (and is distributed across) the lines it
+  // covers; "minimum spend" is always measured against the whole cart.
+  const netByLine = rounded.map((l) => l.netAfterLineDiscount);
+  const netSum = netByLine.reduce((s, n) => s + n, 0);
+  const ruleAmountOn = (rule, base) => {
+    let a = rule.type === 'percent' ? money.percent(base, rule.value || 0) : money.toMinor(rule.value || 0);
+    if (rule.maxDiscount) a = Math.min(a, rule.maxDiscount);
+    return Math.max(0, Math.trunc(a));
+  };
+  const scopedIdx = (rule) => rounded.map((l, i) => (lineMatchesRule(rule, l) ? i : -1)).filter((i) => i >= 0);
+
   let manualCartDiscount = 0;
   if (opts.cartDiscountType === 'percent') manualCartDiscount = money.percent(netSum, opts.cartDiscountValue || 0);
   else if (opts.cartDiscountType === 'fixed') manualCartDiscount = money.toMinor(opts.cartDiscountValue || 0);
   manualCartDiscount = Math.min(Math.max(0, manualCartDiscount), netSum);
 
-  let remaining = netSum - manualCartDiscount;
+  const cartDiscountPerLine = money.distribute(manualCartDiscount, netByLine);
+  const remainingByLine = netByLine.map((n, i) => n - cartDiscountPerLine[i]);
+  const applyScoped = (idx, amount) => {
+    const shares = money.distribute(amount, idx.map((i) => remainingByLine[i]));
+    idx.forEach((li, k) => { cartDiscountPerLine[li] += shares[k]; remainingByLine[li] -= shares[k]; });
+  };
+
+  // percentage base = the scoped lines' net BEFORE the manual cart discount (so a
+  // cart-scope rule still measures against the full cart); clamp = what is left.
   let autoDiscount = 0;
   let autoDiscountName = null;
+  let autoIdx = null;
   for (const rule of opts.autoDiscounts || []) {
-    const amt = Math.min(discountRuleAmount(rule, netSum), remaining);
-    if (amt > autoDiscount) { autoDiscount = amt; autoDiscountName = rule.name || 'Automatic discount'; }
+    if (rule.minSpend && netSum < rule.minSpend) continue;
+    const idx = scopedIdx(rule);
+    const base = idx.reduce((s, i) => s + netByLine[i], 0);
+    const pool = idx.reduce((s, i) => s + remainingByLine[i], 0);
+    if (pool <= 0) continue;
+    const amt = Math.min(ruleAmountOn(rule, base), pool);
+    if (amt > autoDiscount) { autoDiscount = amt; autoDiscountName = rule.name || 'Automatic discount'; autoIdx = idx; }
   }
-  remaining -= autoDiscount;
+  if (autoIdx) applyScoped(autoIdx, autoDiscount);
 
-  const couponDiscount = Math.min(discountRuleAmount(opts.coupon, netSum), remaining);
-  const couponCode = couponDiscount > 0 ? (opts.coupon?.code || null) : null;
+  let couponDiscount = 0;
+  let couponCode = null;
+  if (opts.coupon && !(opts.coupon.minSpend && netSum < opts.coupon.minSpend)) {
+    const idx = scopedIdx(opts.coupon);
+    const base = idx.reduce((s, i) => s + netByLine[i], 0);
+    const pool = idx.reduce((s, i) => s + remainingByLine[i], 0);
+    if (idx.length && pool > 0) {
+      const amt = Math.min(ruleAmountOn(opts.coupon, base), pool);
+      if (amt > 0) { couponDiscount = amt; couponCode = opts.coupon.code || null; applyScoped(idx, amt); }
+    }
+  }
 
   const cartDiscount = manualCartDiscount + autoDiscount + couponDiscount;
-  const cartShares = money.distribute(cartDiscount, rounded.map((l) => l.netAfterLineDiscount));
+  const cartShares = cartDiscountPerLine;
 
   // Pass 3: tax per line
   let subtotal = 0;
