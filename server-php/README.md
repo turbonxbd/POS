@@ -35,9 +35,10 @@ frontend only needs `APP_DATA_MODE=rest` + `APP_API_BASE_URL=/api`, which
 | Signup | `POST /signup` (public) provisions an isolated merchant + pending subscription + auto-login; `POST /support` | 1 |
 | Billing (merchant self-service) | `GET /billing/summary` (+ enabled `paymentMethods`), `POST /billing/pay` (setup / monthly), `POST /billing/branch-request`, `POST /billing/payments/:id/cancel` — amounts computed server-side; manual submissions require a transaction ID + payer account number, land `pending`, notify Super Admin, and return a prefilled WhatsApp link | 1 |
 | Chat | `POST /chat` + `GET /chat/:id?since=` (public, polled), `/platform/chat*` (Super Admin) — real storage, no websockets | 1 |
+| Sync | `GET /sync/changes?since=<cursor>` — the merchant's tables that hold a row newer than the cursor (names only, merchant-scoped). The frontend polls this ~every 3.5s in `rest` mode and re-fetches what changed, so other devices/branches update with no page refresh. Shared hosting can't hold WebSocket/SSE, so the poll is the transport | 1 |
 | Platform (Super Admin) | dashboard (+ `attention` counts), **approvals inbox** (`GET /platform/approvals`, `POST /platform/approvals/:merchantId/{approve,reject}` — one action verifies the newest pending payment / activates the account / notifies the merchant), merchants (paginated + tag filter + detail), **internal notes & tags**, **message a merchant**, **reset the owner's password** (`POST /platform/merchants/:id/reset-owner`), subscriptions, `subscription-payments` (record + Approve/**Reject** with reason, typed `initial`/`monthly`/`branch`), revenue (by type / month / plan, approved + rejected counts, upcoming), `platform/notifications` (payment-request bell), **`GET /platform/audit` activity log**, support | 3 |
 | Access gate | `App::enforceAccessGate` — a blocked subscription (expired past grace / suspended / cancelled) returns 402 on merchant writes; GET + `/billing/*` stay open | (in billing) |
-| **Total** | | **65/65 passing** (`php tests/run.php`) |
+| **Total** | | **66/66 passing** (`php tests/run.php`) |
 
 ## Security model (industry-standard practices, not "100% secure")
 

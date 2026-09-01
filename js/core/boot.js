@@ -79,6 +79,11 @@ export function boot({ seedIfEmpty = true } = {}) {
     }
     // Full-screen "No Internet" block, on every panel.
     import('../components/net-guard.js').then((m) => m.startNetGuard()).catch(() => {});
+    // Cross-device real-time: poll the server for what changed (rest mode only —
+    // in mock the storage event already syncs the one browser).
+    if (config.api.mode === 'rest') {
+      import('./sync-poll.js').then((m) => m.startSyncPoll()).catch(() => {});
+    }
 
     store.set({ bootReady: true });
     return true;

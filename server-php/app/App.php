@@ -32,6 +32,7 @@ final class App
         \Afia\Modules\Signup::class,
         \Afia\Modules\Billing::class,
         \Afia\Modules\Chat::class,
+        \Afia\Modules\Sync::class,
         \Afia\Modules\Platform::class,
     ];
 

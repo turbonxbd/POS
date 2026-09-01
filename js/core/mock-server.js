@@ -26,6 +26,7 @@ import registerPlatform from './mock/platform.routes.js';
 import registerPlatformSettings from './mock/platform-settings.routes.js';
 import registerBilling from './mock/billing.routes.js';
 import registerChat from './mock/chat.routes.js';
+import registerSync from './mock/sync.routes.js';
 
 const router = new MockRouter();
 let initialised = false;
@@ -48,6 +49,7 @@ export function initMockServer() {
     registerPlatformSettings,
     registerBilling,
     registerChat,
+    registerSync,
   ].forEach((fn) => fn(router));
 
   registerMockHandler((req) => {

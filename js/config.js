@@ -49,6 +49,11 @@ export const config = Object.freeze({
     timeoutMs: 20000,
   },
 
+  /** Cross-device real-time: poll GET /sync/changes and re-fetch what changed. */
+  sync: {
+    pollMs: Number(injected.APP_SYNC_POLL_MS ?? 3500),
+  },
+
   storage: {
     /** Root localStorage key. Bump the version to force a clean migration. */
     dbKey: 'afia_pos_db_v3',
