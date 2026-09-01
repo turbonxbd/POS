@@ -318,6 +318,38 @@ final class Reports
         return $rows;
     }
 
+    /** Loyalty: points earned vs redeemed (with the money value) and the live balance. */
+    public static function loyaltyRows(Context $ctx): array
+    {
+        $byCust = [];
+        foreach ($ctx->repo()->allDocs('customer_ledger', "type IN ('loyalty_earn','loyalty_redeem')") as $l) {
+            $cid = $l['customerId'] ?? '';
+            $acc = $byCust[$cid] ?? ['earned' => 0, 'redeemed' => 0, 'redeemValue' => 0];
+            $pts = (int) ($l['points'] ?? 0);
+            if ($pts > 0) {
+                $acc['earned'] += $pts;
+            } else {
+                $acc['redeemed'] += -$pts;
+                $acc['redeemValue'] += (int) ($l['amount'] ?? 0);
+            }
+            $byCust[$cid] = $acc;
+        }
+        $rows = [];
+        foreach ($ctx->repo()->allDocs('customers', '1=1') as $c) {
+            $acc = $byCust[$c['id']] ?? null;
+            if (!$acc && (int) ($c['loyaltyPoints'] ?? 0) <= 0) {
+                continue;
+            }
+            $rows[] = [
+                'customerId' => $c['id'], 'customer' => $c['name'] ?? '-', 'phone' => $c['phone'] ?? '',
+                'earned' => $acc['earned'] ?? 0, 'redeemed' => $acc['redeemed'] ?? 0,
+                'redeemValue' => $acc['redeemValue'] ?? 0, 'balance' => (int) ($c['loyaltyPoints'] ?? 0),
+            ];
+        }
+        usort($rows, static fn ($a, $b) => $b['balance'] <=> $a['balance']);
+        return $rows;
+    }
+
     public static function expenseRows(array $expenses): array
     {
         return array_map(static fn ($e) => [

@@ -226,11 +226,11 @@ await step('settings', async () => {
 
 // ---- reports ----
 const badReports = [];
-for (const rt of ['sales', 'profit', 'purchases', 'inventory', 'stock-movement', 'customers', 'suppliers', 'expenses', 'cashier', 'payments', 'tax', 'product-performance', 'category-performance', 'daily-closing', 'dead-stock']) {
+for (const rt of ['sales', 'profit', 'purchases', 'inventory', 'stock-movement', 'customers', 'suppliers', 'expenses', 'cashier', 'payments', 'tax', 'product-performance', 'category-performance', 'daily-closing', 'dead-stock', 'loyalty']) {
   try { if (!Array.isArray((await http.get('/reports/' + rt, { params: { branchId: B, preset: 'this_year' } })).rows)) badReports.push(rt); }
   catch (e) { badReports.push(rt + '(' + e.message + ')'); }
 }
-T('all 15 reports return rows[]', badReports.length === 0, badReports.join(', '));
+T('all 16 reports return rows[]', badReports.length === 0, badReports.join(', '));
 
 await step('dead-stock report', async () => {
   const dp = await http.post('/products', { branchId: B, name: 'QA Dead Item', sellingPrice: 8000, costPrice: 5000, unit: 'pcs', openingStock: 6 });
@@ -331,6 +331,39 @@ await step('coupons + automatic discounts', async () => {
   try { await http.post('/sales', { branchId: B, items: [{ productId: Bp.id, qty: 1 }], couponCode: 'AONLY', payments: [{ method: 'cash', amount: 10000 }] }); }
   catch (e) { scopedBad = e.status === 422 || e.status === 400; }
   T('a product-scoped coupon is rejected when no matching product is in the cart', scopedBad);
+});
+
+// ---- loyalty: earn + redeem ----
+await step('loyalty points', async () => {
+  setActor(login.user);
+  await http.post('/cash-register/open', { branchId: B, openingCash: 0 }).catch(() => {});
+  for (const d of (await http.get('/discounts', { params: { pageSize: 'all' } })).data.filter((x) => !x.archivedAt)) await http.del('/discounts/' + d.id);
+  await http.put('/settings', { pos: { loyaltyPerCurrency: 0.01, loyaltyRedeemValue: 1, loyaltyMinRedeem: 10 } });
+  const P = await http.post('/products', { branchId: B, name: 'QA Loyalty Item', sellingPrice: 100000, costPrice: 40000, unit: 'pcs', openingStock: 20, minStock: 1 });
+  const cust = await http.post('/customers', { name: 'Points Person', phone: '01700055500' });
+
+  const s1 = await http.post('/sales', { branchId: B, customerId: cust.id, items: [{ productId: P.id, qty: 1 }], payments: [{ method: 'cash', amount: 100000 }] });
+  // 1000.00 spent * 0.01 = 10 points earned
+  const c1 = await http.get('/customers/' + cust.id);
+  T('points earned on a sale', c1.loyaltyPoints === 10, String(c1.loyaltyPoints));
+
+  const s2 = await http.post('/sales', { branchId: B, customerId: cust.id, items: [{ productId: P.id, qty: 1 }], redeemPoints: 10, payments: [{ method: 'cash', amount: 99000 }] });
+  // grand still 1000.00 ; 10 pts * 1.00 = 10.00 redeemed ; payable 990.00
+  T('redeemed points recorded on the sale', s2.loyaltyRedeemed === 10 && s2.loyaltyRedeemValue === 1000, `${s2.loyaltyRedeemed}/${s2.loyaltyRedeemValue}`);
+  T('redemption counts as paid (no due)', s2.grandTotal === 100000 && s2.paidTotal === 100000 && s2.dueTotal === 0, JSON.stringify({ g: s2.grandTotal, p: s2.paidTotal, d: s2.dueTotal }));
+  const c2 = await http.get('/customers/' + cust.id);
+  // -10 redeemed + 10 earned again = balance back to 10
+  T('balance nets redeem + fresh earn', c2.loyaltyPoints === 10, String(c2.loyaltyPoints));
+
+  let overRedeem = false;
+  try { await http.post('/sales', { branchId: B, customerId: cust.id, items: [{ productId: P.id, qty: 1 }], redeemPoints: 999, payments: [{ method: 'cash', amount: 100000 }] }); }
+  catch (e) { overRedeem = e.status === 422 || e.status === 400; }
+  T('redeeming more points than the customer has is rejected', overRedeem);
+
+  const rep = await http.get('/reports/loyalty');
+  const row = rep.rows.find((r) => r.customerId === cust.id);
+  T('loyalty report shows earned / redeemed / balance', row && row.earned === 20 && row.redeemed === 10 && row.balance === 10, JSON.stringify(row));
+  await http.put('/settings', { pos: { loyaltyPerCurrency: 0, loyaltyRedeemValue: 1, loyaltyMinRedeem: 0 } });
 });
 
 // ---- fixed-amount VAT (a flat fee on every sale) ----

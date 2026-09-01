@@ -1,8 +1,9 @@
 /**
- * payment.js - payment modal. Resolves with a payments[] array or null.
- * Cashier picks the tender directly: Cash, bKash, Nagad, Rocket, Bank, Card,
- * Other. Cash shows change; the rest take an optional reference / txn ID.
- * Split / mixed payment is supported.
+ * payment.js - payment modal. Resolves with { payments, onAccount, redeemPoints }
+ * or null. Cashier picks the tender directly: Cash, bKash, Nagad, Rocket, Bank,
+ * Card, Other. Cash shows change; the rest take an optional reference / txn ID.
+ * Split / mixed payment is supported. A customer with loyalty points can redeem
+ * some against the total (a tender, so the sale total itself is unchanged).
  *
  * Stored record shape is unchanged so reports keep working:
  *   cash               -> { method: 'cash', amount }
@@ -36,7 +37,7 @@ function toRecord(id, amount, reference) {
   return { method: id, amount, reference: ref };
 }
 
-export function openPayment({ total, customer }) {
+export function openPayment({ total, customer, loyalty }) {
   return new Promise((resolve) => {
     let mixed = false;
     let method = 'cash';
@@ -44,6 +45,15 @@ export function openPayment({ total, customer }) {
     let cashReceived = 0;
     let settled = false;
     let onAccount = false;
+    let redeemPoints = 0;
+
+    const perPoint = loyalty && loyalty.perPoint > 0 ? loyalty.perPoint : 0;
+    const custPoints = loyalty?.points || 0;
+    const minRedeem = Math.max(1, loyalty?.minRedeem || 1);
+    const canRedeem = !!customer && perPoint > 0 && custPoints >= minRedeem && total >= perPoint * minRedeem;
+    const maxRedeemPoints = canRedeem ? Math.min(custPoints, Math.floor(total / perPoint)) : 0;
+
+    const payable = () => Math.max(0, total - redeemPoints * perPoint);
 
     const m = openModal({
       title: 'Take Payment',
@@ -52,12 +62,18 @@ export function openPayment({ total, customer }) {
       body: `<div class="pay-grid">
         <div class="pay-total-box">
           <span class="label">Amount to pay</span>
-          <div class="amount">${money.format(total)}</div>
+          <div class="amount js-payable">${money.format(total)}</div>
         </div>
         <div class="row" style="grid-column:1/-1;justify-content:space-between">
           <label class="switch"><input type="checkbox" class="js-mixed"><span class="switch__track"><span class="switch__thumb"></span></span><span>Split / mixed payment</span></label>
           ${customer ? `<span class="badge badge--brand">${escapeHtml(customer.name)}</span>` : ''}
         </div>
+        ${canRedeem ? `<label class="field field--row" style="grid-column:1/-1;align-items:center">
+          <span class="label" style="width:auto">Redeem points <span class="opt">${custPoints} available · ${money.format(perPoint)}/pt</span></span>
+          <input class="input js-redeem" type="number" inputmode="numeric" min="0" max="${maxRedeemPoints}" step="1" placeholder="0" style="width:100px">
+          <button type="button" class="btn btn--ghost btn--sm js-redeem-max">Max</button>
+          <span class="js-redeem-val muted"></span>
+        </label>` : ''}
         ${customer ? `<label class="switch" style="grid-column:1/-1"><input type="checkbox" class="js-account"><span class="switch__track"><span class="switch__thumb"></span></span><span>Charge the remainder to ${escapeHtml(customer.name)}'s account (due)</span></label>` : ''}
         <div class="pay-method-grid js-methods">
           ${METHODS.map((mt) => `<button type="button" class="pay-method ${mt.id === 'cash' ? 'is-active' : ''}" data-m="${mt.id}">${icon(mt.icon, { size: 20 })}${mt.label}</button>`).join('')}
@@ -103,10 +119,21 @@ export function openPayment({ total, customer }) {
     exactBtn.type = 'button';
     exactBtn.textContent = 'Exact';
     exactBtn.addEventListener('click', () => {
-      $('.js-cash-received').value = money.toMajor(total);
+      $('.js-cash-received').value = money.toMajor(payable());
       recalc();
     });
     quick.appendChild(exactBtn);
+
+    $('.js-redeem')?.addEventListener('input', (e) => {
+      redeemPoints = Math.max(0, Math.min(maxRedeemPoints, Math.trunc(Number(e.target.value) || 0)));
+      if (String(redeemPoints) !== e.target.value) e.target.value = redeemPoints || '';
+      recalc();
+    });
+    $('.js-redeem-max')?.addEventListener('click', () => {
+      redeemPoints = maxRedeemPoints;
+      $('.js-redeem').value = maxRedeemPoints;
+      recalc();
+    });
 
     $('.js-mixed').addEventListener('change', (e) => {
       mixed = e.target.checked;
@@ -132,6 +159,10 @@ export function openPayment({ total, customer }) {
     $('.js-account')?.addEventListener('change', (e) => { onAccount = e.target.checked; recalc(); });
 
     function recalc() {
+      const due = payable();
+      $('.js-payable').textContent = money.format(due);
+      if ($('.js-redeem-val')) $('.js-redeem-val').textContent = redeemPoints ? `−${money.format(redeemPoints * perPoint)}` : '';
+
       let paid = 0;
       if (mixed) {
         m.$$('.js-mix').forEach((i) => {
@@ -143,11 +174,11 @@ export function openPayment({ total, customer }) {
         cashReceived = money.toMinor($('.js-cash-received').value || 0);
         paid = cashReceived;
       } else {
-        paid = total;
+        paid = due;
       }
-      const effectivePaid = mixed ? paid : (method === 'cash' ? cashReceived : total);
-      const change = Math.max(0, (method === 'cash' && !mixed ? cashReceived : effectivePaid) - total);
-      const short = Math.max(0, total - effectivePaid);
+      const effectivePaid = mixed ? paid : (method === 'cash' ? cashReceived : due);
+      const change = Math.max(0, (method === 'cash' && !mixed ? cashReceived : effectivePaid) - due);
+      const short = Math.max(0, due - effectivePaid);
       const box = $('.js-change');
       if (short > 0) {
         box.classList.add('is-due');
@@ -158,13 +189,12 @@ export function openPayment({ total, customer }) {
         box.querySelector('span').textContent = 'Change due';
         $('.js-change-amt').textContent = money.format(change);
       }
-      // on-account sales may be short (the shortfall becomes the customer's due);
-      // they still need at least a customer, which is guaranteed by the toggle.
       $('.js-confirm').disabled = short > 0.0001 && !onAccount;
     }
 
     $('.js-cancel').addEventListener('click', () => m.close());
     $('.js-confirm').addEventListener('click', () => {
+      const due = payable();
       const payments = [];
       if (mixed) {
         for (const mt of METHODS) {
@@ -172,16 +202,13 @@ export function openPayment({ total, customer }) {
           if (v > 0) payments.push(toRecord(mt.id, v));
         }
       } else if (method === 'cash') {
-        // on a due sale the cashier may take partial cash now, rest on account
-        const amt = onAccount ? Math.min(cashReceived, total) : cashReceived;
+        const amt = onAccount ? Math.min(cashReceived, due) : cashReceived;
         if (amt > 0 || !onAccount) payments.push(toRecord('cash', amt));
       } else if (!onAccount) {
-        payments.push(toRecord(method, total, $('.js-ref').value));
+        payments.push(toRecord(method, due, $('.js-ref').value));
       }
-      // (on-account + a non-cash tender records nothing now — the whole amount
-      //  becomes the customer's due; use cash or split to record a part-payment)
       settled = true;
-      resolve({ payments: payments.filter((p) => p.amount > 0 || !onAccount), onAccount });
+      resolve({ payments: payments.filter((p) => p.amount > 0 || !onAccount), onAccount, redeemPoints });
       m.close();
     });
 

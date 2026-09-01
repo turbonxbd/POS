@@ -192,6 +192,10 @@ export default function register(router) {
         const rows = lib.inventoryValuationRows(s.branchId);
         return ok({ rows, totals: lib.aggregate(rows, ['quantity', 'stockValue', 'potentialSales', 'potentialProfit']) });
       }
+      case 'loyalty': {
+        const rows = lib.loyaltyRows();
+        return ok({ rows, totals: lib.aggregate(rows, ['earned', 'redeemed', 'redeemValue', 'balance']) });
+      }
       case 'dead-stock': {
         const days = Math.max(1, Number(query.days) || 90);
         let rows = lib.deadStockRows(s.branchId, days);

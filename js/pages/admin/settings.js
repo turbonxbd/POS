@@ -137,7 +137,9 @@ export default async function settingsPage(ctx, mount) {
           ${field('Invoice number template', 'pos.invoiceTemplate', text('pos.invoiceTemplate', pos.invoiceTemplate), 'Tokens: {PREFIX} {BR} {SEQ} {YY} {MM}')}
           ${field('Default tax for new products', 'pos.defaultTaxId', sel('pos.defaultTaxId', pos.defaultTaxId || '', [{ value: '', label: 'None' }, ...taxes.map((t) => ({ value: t.id, label: `${t.name} (${t.rate}%)` }))]))}
           ${field('Hold sale limit', 'pos.holdSaleLimit', numI('pos.holdSaleLimit', pos.holdSaleLimit, 'min="1"'))}
-          ${field('Loyalty points per ৳', 'pos.loyaltyPerCurrency', numI('pos.loyaltyPerCurrency', pos.loyaltyPerCurrency, 'step="0.01" min="0"'))}
+          ${field('Loyalty points per ৳', 'pos.loyaltyPerCurrency', numI('pos.loyaltyPerCurrency', pos.loyaltyPerCurrency, 'step="0.01" min="0"'), 'Points a customer earns per ৳1 spent')}
+          ${field('৳ per point on redeem', 'pos.loyaltyRedeemValue', numI('pos.loyaltyRedeemValue', pos.loyaltyRedeemValue ?? 1, 'step="0.01" min="0"'), '0 = redemption off')}
+          ${field('Minimum points to redeem', 'pos.loyaltyMinRedeem', numI('pos.loyaltyMinRedeem', pos.loyaltyMinRedeem, 'min="0"'))}
         </div>
         ${sw('pos.printAfterSale', pos.printAfterSale, 'Automatically print a receipt after each sale')}
         ${sw('pos.autoFocusBarcode', pos.autoFocusBarcode, 'Auto-focus the barcode field between scans')}

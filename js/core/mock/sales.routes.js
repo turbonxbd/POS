@@ -263,14 +263,33 @@ export default function register(router) {
         : 'This coupon cannot be applied to the current cart.');
     }
 
-    // 8 validate payment
+    // 7b loyalty redemption (a tender, not a discount - the sale total is unchanged)
+    const redeemPointsRequested = Math.max(0, Math.trunc(Number(b.redeemPoints) || 0));
+    let loyaltyRedeemed = 0;
+    let loyaltyRedeemValue = 0;
+    if (redeemPointsRequested > 0) {
+      if (!b.customerId) badRequest('Select a customer to redeem loyalty points.');
+      const cust = tdb('customers').get(b.customerId);
+      if (!cust) badRequest('That customer no longer exists.');
+      const perPoint = money.toMinor(settings.pos?.loyaltyRedeemValue ?? 1);
+      const minRedeem = Math.max(0, Math.trunc(settings.pos?.loyaltyMinRedeem || 0));
+      if (perPoint <= 0) badRequest('Loyalty redemption is turned off (set a value per point in Settings → POS).');
+      if (redeemPointsRequested < minRedeem) badRequest(`Redeem at least ${minRedeem} points.`);
+      if (redeemPointsRequested > (cust.loyaltyPoints || 0)) badRequest(`${cust.name} only has ${cust.loyaltyPoints || 0} points.`);
+      const maxByTotal = Math.floor(calc.grandTotal / perPoint);
+      loyaltyRedeemed = Math.min(redeemPointsRequested, maxByTotal);
+      loyaltyRedeemValue = loyaltyRedeemed * perPoint;
+    }
+
+    // 8 validate payment (loyalty value counts as already tendered)
     const isDueSale = b.onAccount === true && b.customerId;
+    const payableTotal = Math.max(0, calc.grandTotal - loyaltyRedeemValue);
     let paymentInfo = { paid: 0, change: 0, cashPaid: 0, list: [] };
     if (!isDueSale || (b.payments && b.payments.length)) {
-      paymentInfo = validatePayments(b.payments, isDueSale ? 0 : calc.grandTotal);
+      paymentInfo = validatePayments(b.payments, isDueSale ? 0 : payableTotal);
     }
-    if (isDueSale && paymentInfo.paid > calc.grandTotal) badRequest('Amount paid exceeds the total on an account sale.');
-    const dueAmount = Math.max(0, calc.grandTotal - paymentInfo.paid);
+    if (isDueSale && paymentInfo.paid > payableTotal) badRequest('Amount paid exceeds the total on an account sale.');
+    const dueAmount = Math.max(0, payableTotal - paymentInfo.paid);
     if (dueAmount > 0 && !b.customerId) {
       conflict('Select a customer to record an outstanding balance for an unpaid amount.');
     }
@@ -319,10 +338,12 @@ export default function register(router) {
         totalQty: calc.totalQty,
         totalCost: calc.totalCost,
         estimatedProfit: calc.estimatedProfit,
-        paidTotal: paymentInfo.paid,
+        loyaltyRedeemed,
+        loyaltyRedeemValue,
+        paidTotal: paymentInfo.paid + loyaltyRedeemValue,
         changeTotal: paymentInfo.change,
         dueTotal: dueAmount,
-        paymentSummary: (paymentInfo.list.map((p) => p.method).join('+')) || (isDueSale ? 'account' : ''),
+        paymentSummary: [...paymentInfo.list.map((p) => p.method), ...(loyaltyRedeemValue ? ['points'] : [])].join('+') || (isDueSale ? 'account' : ''),
         createdAt: now(),
       });
 
@@ -395,13 +416,29 @@ export default function register(router) {
         const loyaltyEarned = settings.pos?.loyaltyPerCurrency
           ? Math.floor(money.toMajor(calc.grandTotal) * settings.pos.loyaltyPerCurrency)
           : 0;
+        const startPoints = customer.loyaltyPoints || 0;
+        const nextPoints = startPoints - loyaltyRedeemed + loyaltyEarned;
         tdb('customers').update(customer.id, (c) => ({
           totalOrders: (c.totalOrders || 0) + 1,
           totalPurchases: (c.totalPurchases || 0) + calc.grandTotal,
           outstandingBalance: (c.outstandingBalance || 0) + dueAmount,
-          loyaltyPoints: (c.loyaltyPoints || 0) + loyaltyEarned,
+          loyaltyPoints: nextPoints,
           lastPurchaseAt: now(),
         }));
+        if (loyaltyRedeemed > 0) {
+          tdb('customer_ledger').insert({
+            id: uuid(), customerId: customer.id, type: 'loyalty_redeem', refType: 'sale', refId: sale.id,
+            amount: loyaltyRedeemValue, balanceDelta: 0, points: -loyaltyRedeemed,
+            note: `Redeemed ${loyaltyRedeemed} points on ${invoiceNo}`, at: now(),
+          });
+        }
+        if (loyaltyEarned > 0) {
+          tdb('customer_ledger').insert({
+            id: uuid(), customerId: customer.id, type: 'loyalty_earn', refType: 'sale', refId: sale.id,
+            amount: 0, balanceDelta: 0, points: loyaltyEarned,
+            note: `Earned ${loyaltyEarned} points on ${invoiceNo}`, at: now(),
+          });
+        }
         if (dueAmount > 0) {
           tdb('customer_ledger').insert({
             id: uuid(), customerId: customer.id, type: 'sale_due', refType: 'sale', refId: sale.id,

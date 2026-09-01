@@ -125,6 +125,7 @@ export default async function saleDetailPage(ctx, mount) {
               <div class="detail-list__row"><dt>Discount</dt><dd>−${money.format(sale.discountTotal)}</dd></div>
               ${(sale.taxLines || []).map((t) => `<div class="detail-list__row"><dt>${escapeHtml(t.name)}</dt><dd>${money.format(t.amount)}</dd></div>`).join('')}
               <div class="detail-list__row"><dt>Grand total</dt><dd class="strong">${money.format(sale.grandTotal)}</dd></div>
+              ${sale.loyaltyRedeemValue ? `<div class="detail-list__row"><dt>Paid with points</dt><dd>−${money.format(sale.loyaltyRedeemValue)} (${sale.loyaltyRedeemed} pts)</dd></div>` : ''}
             </dl>
           </div>
           <div class="card card--pad">

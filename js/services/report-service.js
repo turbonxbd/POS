@@ -42,6 +42,7 @@ export const REPORT_TYPES = [
   { type: 'purchases', label: 'Purchase Report', icon: 'truck', entity: 'none', dated: true, filters: ['search', 'supplier', 'status'] },
   { type: 'inventory-valuation', label: 'Inventory Valuation', icon: 'warehouse', entity: 'product', dated: false, filters: ['search'] },
   { type: 'dead-stock', label: 'Dead Stock / Ageing', icon: 'clock', entity: 'product', dated: false, filters: ['search', 'days', 'stockStatus'] },
+  { type: 'loyalty', label: 'Loyalty Points', icon: 'users', entity: 'customer', dated: false, filters: ['search'] },
   { type: 'stock-movement', label: 'Stock Movement', icon: 'sliders', entity: 'none', dated: true, filters: ['search'] },
   { type: 'expenses', label: 'Expense Report', icon: 'wallet', entity: 'none', dated: true, filters: ['search', 'category'] },
   { type: 'cashier', label: 'Cashier Performance', icon: 'user', entity: 'none', dated: true, filters: [] },

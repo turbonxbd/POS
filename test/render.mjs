@@ -85,6 +85,7 @@ const pages = [
   ['taxes', 'js/pages/admin/taxes.js', { params: {}, query: {} }],
   ['reports', 'js/pages/admin/reports.js', { params: {}, query: {} }],
   ['reports(dead-stock)', 'js/pages/admin/reports.js', { params: { type: 'dead-stock' }, query: {} }],
+  ['reports(loyalty)', 'js/pages/admin/reports.js', { params: { type: 'loyalty' }, query: {} }],
   ['audit-logs', 'js/pages/admin/audit-logs.js', { params: {}, query: {} }],
   ['notifications', 'js/pages/admin/notifications.js', { params: {}, query: {} }],
   ['branches', 'js/pages/admin/branches.js', { params: {}, query: {} }],

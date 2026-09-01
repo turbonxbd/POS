@@ -712,9 +712,17 @@ export async function renderPOS(mount, { onNeedRegister } = {}) {
       }
     }
 
-    const pay = await openPayment({ total: totals.grandTotal, customer: cart.customer });
+    const pay = await openPayment({
+      total: totals.grandTotal,
+      customer: cart.customer,
+      loyalty: cart.customer ? {
+        points: cart.customer.loyaltyPoints || 0,
+        perPoint: money.toMinor(settings.pos?.loyaltyRedeemValue ?? 1),
+        minRedeem: settings.pos?.loyaltyMinRedeem || 0,
+      } : null,
+    });
     if (!pay) return;
-    const { payments, onAccount } = pay;
+    const { payments, onAccount, redeemPoints } = pay;
     if (onAccount && !cart.customer) {
       toast.error('Select a customer before charging to account.');
       return;
@@ -727,7 +735,7 @@ export async function renderPOS(mount, { onNeedRegister } = {}) {
     const idempotencyKey = uuid();
     try {
       const sale = await checkoutMutex(() =>
-        salesService.createSale({ ...cart.toDraft(), payments, onAccount: !!onAccount }, { idempotencyKey }),
+        salesService.createSale({ ...cart.toDraft(), payments, onAccount: !!onAccount, redeemPoints: redeemPoints || 0 }, { idempotencyKey }),
       );
       bus.emit('pos:sale-completed', sale);
       await onSaleComplete(sale);

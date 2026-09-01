@@ -168,6 +168,10 @@ final class Analytics
                 $rows = Reports::inventoryValuationRows($ctx, $s['branchId']);
                 return Response::json(['rows' => $rows, 'totals' => Reports::aggregate($rows, ['quantity', 'stockValue', 'potentialSales', 'potentialProfit'])]);
 
+            case 'loyalty':
+                $rows = Reports::loyaltyRows($ctx);
+                return Response::json(['rows' => $rows, 'totals' => Reports::aggregate($rows, ['earned', 'redeemed', 'redeemValue', 'balance'])]);
+
             case 'dead-stock':
                 $days = max(1, (int) ($q['days'] ?? 90));
                 $rows = Reports::deadStockRows($ctx, $s['branchId'], $days);

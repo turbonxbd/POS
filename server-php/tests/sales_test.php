@@ -230,6 +230,55 @@ test('checkout: a product-scoped discount only touches the products it names', f
     expect_eq($rej['status'], 422);
 });
 
+test('checkout: loyalty points earn on a sale and can be redeemed as a tender', function () {
+    $kit = new TestKit();
+    $s = $kit->loginAs();
+    authed($kit, $s, 'PUT', '/api/settings', ['json' => ['pos' => ['loyaltyPerCurrency' => 0.01, 'loyaltyRedeemValue' => 1, 'loyaltyMinRedeem' => 10]]]);
+    $p = mkProduct($kit, $s, 'Loyalty Item', 'LOY-1', '2000000009116', 40000, 100000, 20);
+    $c = authed($kit, $s, 'POST', '/api/customers', ['json' => ['name' => 'Points Person', 'phone' => '01700055501']])['body'];
+
+    authed($kit, $s, 'POST', '/api/sales', ['json' => [
+        'branchId' => $kit->branchId, 'customerId' => $c['id'],
+        'items' => [['productId' => $p['id'], 'qty' => 1]],
+        'payments' => [['method' => 'cash', 'amount' => 100000]],
+    ]]);
+    expect_eq(authed($kit, $s, 'GET', '/api/customers/' . $c['id'], [])['body']['loyaltyPoints'], 10);
+
+    $s2 = authed($kit, $s, 'POST', '/api/sales', ['json' => [
+        'branchId' => $kit->branchId, 'customerId' => $c['id'],
+        'items' => [['productId' => $p['id'], 'qty' => 1]],
+        'redeemPoints' => 10,
+        'payments' => [['method' => 'cash', 'amount' => 99000]],
+    ]]);
+    expect_eq($s2['status'], 201, json_encode($s2['body']));
+    expect_eq($s2['body']['loyaltyRedeemed'], 10);
+    expect_eq($s2['body']['loyaltyRedeemValue'], 1000);
+    expect_eq($s2['body']['grandTotal'], 100000);
+    expect_eq($s2['body']['dueTotal'], 0);
+    // -10 redeemed + 10 earned again
+    expect_eq(authed($kit, $s, 'GET', '/api/customers/' . $c['id'], [])['body']['loyaltyPoints'], 10);
+
+    $over = authed($kit, $s, 'POST', '/api/sales', ['json' => [
+        'branchId' => $kit->branchId, 'customerId' => $c['id'],
+        'items' => [['productId' => $p['id'], 'qty' => 1]],
+        'redeemPoints' => 999,
+        'payments' => [['method' => 'cash', 'amount' => 100000]],
+    ]]);
+    expect_eq($over['status'], 422);
+
+    $rep = authed($kit, $s, 'GET', '/api/reports/loyalty', [])['body'];
+    $row = null;
+    foreach ($rep['rows'] as $r) {
+        if ($r['customerId'] === $c['id']) {
+            $row = $r;
+        }
+    }
+    expect($row !== null, 'customer on the loyalty report');
+    expect_eq($row['earned'], 20);
+    expect_eq($row['redeemed'], 10);
+    expect_eq($row['balance'], 10);
+});
+
 test('checkout: fixed-amount VAT adds a flat fee to every sale', function () {
     $kit = new TestKit();
     $s = $kit->loginAs();

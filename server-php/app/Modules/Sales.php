@@ -214,20 +214,45 @@ final class Sales
                 : 'This coupon cannot be applied to the current cart.');
         }
 
+        // loyalty redemption (a tender - the sale total is unchanged)
+        $redeemReq = max(0, (int) ($b['redeemPoints'] ?? 0));
+        $loyaltyRedeemed = 0;
+        $loyaltyRedeemValue = 0;
+        if ($redeemReq > 0) {
+            if (empty($b['customerId'])) {
+                throw HttpError::badRequest('Select a customer to redeem loyalty points.');
+            }
+            $cust = $ctx->repo()->doc('customers', $b['customerId']) ?? throw HttpError::badRequest('That customer no longer exists.');
+            $perPoint = Money::toMinor($settings['pos']['loyaltyRedeemValue'] ?? 1);
+            $minRedeem = max(0, (int) ($settings['pos']['loyaltyMinRedeem'] ?? 0));
+            if ($perPoint <= 0) {
+                throw HttpError::badRequest('Loyalty redemption is turned off (set a value per point in Settings > POS).');
+            }
+            if ($redeemReq < $minRedeem) {
+                throw HttpError::badRequest("Redeem at least {$minRedeem} points.");
+            }
+            if ($redeemReq > (int) ($cust['loyaltyPoints'] ?? 0)) {
+                throw HttpError::badRequest("{$cust['name']} only has " . (int) ($cust['loyaltyPoints'] ?? 0) . ' points.');
+            }
+            $loyaltyRedeemed = min($redeemReq, intdiv($calc['grandTotal'], $perPoint));
+            $loyaltyRedeemValue = $loyaltyRedeemed * $perPoint;
+        }
+
         $isDueSale = ($b['onAccount'] ?? false) === true && !empty($b['customerId']);
+        $payableTotal = max(0, $calc['grandTotal'] - $loyaltyRedeemValue);
         $payInfo = ['paid' => 0, 'change' => 0, 'cashPaid' => 0, 'list' => []];
         if (!$isDueSale || !empty($b['payments'])) {
-            $payInfo = Cart::validatePayments($b['payments'] ?? null, $isDueSale ? 0 : $calc['grandTotal']);
+            $payInfo = Cart::validatePayments($b['payments'] ?? null, $isDueSale ? 0 : $payableTotal);
         }
-        if ($isDueSale && $payInfo['paid'] > $calc['grandTotal']) {
+        if ($isDueSale && $payInfo['paid'] > $payableTotal) {
             throw HttpError::badRequest('Amount paid exceeds the total on an account sale.');
         }
-        $due = max(0, $calc['grandTotal'] - $payInfo['paid']);
+        $due = max(0, $payableTotal - $payInfo['paid']);
         if ($due > 0 && empty($b['customerId'])) {
             throw HttpError::conflict('Select a customer to record an outstanding balance for an unpaid amount.');
         }
 
-        return $ctx->db->transaction(function () use ($ctx, $b, $settings, $branch, $stamp, $session, $lines, $calc, $payInfo, $due, $isDueSale, $allowNegative, $cartDiscounts) {
+        return $ctx->db->transaction(function () use ($ctx, $b, $settings, $branch, $stamp, $session, $lines, $calc, $payInfo, $due, $isDueSale, $allowNegative, $cartDiscounts, $loyaltyRedeemed, $loyaltyRedeemValue) {
             $invoiceNo = DocNo::next($ctx->repo(), 'invoice:' . $branch['id'],
                 $settings['pos']['invoiceTemplate'] ?? 'INV-{BR}-{SEQ}',
                 ['prefix' => $settings['business']['invoicePrefix'] ?? 'INV', 'branchCode' => $branch['code'] ?: 'MAIN', 'seqWidth' => 5]);
@@ -254,8 +279,9 @@ final class Sales
                 'taxTotal' => $calc['taxTotal'], 'taxLines' => $calc['taxLines'],
                 'grandTotal' => $calc['grandTotal'], 'totalQty' => $calc['totalQty'],
                 'totalCost' => $calc['totalCost'], 'estimatedProfit' => $calc['estimatedProfit'],
-                'paidTotal' => $payInfo['paid'], 'changeTotal' => $payInfo['change'], 'dueTotal' => $due,
-                'paymentSummary' => implode('+', array_column($payInfo['list'], 'method')) ?: ($isDueSale ? 'account' : ''),
+                'loyaltyRedeemed' => $loyaltyRedeemed, 'loyaltyRedeemValue' => $loyaltyRedeemValue,
+                'paidTotal' => $payInfo['paid'] + $loyaltyRedeemValue, 'changeTotal' => $payInfo['change'], 'dueTotal' => $due,
+                'paymentSummary' => implode('+', array_merge(array_column($payInfo['list'], 'method'), $loyaltyRedeemValue ? ['points'] : [])) ?: ($isDueSale ? 'account' : ''),
                 'createdAt' => $now,
             ];
             $ctx->repo()->insert('sales', $saleId, $saleDoc, [
@@ -309,11 +335,13 @@ final class Sales
             if ($customer) {
                 $loyaltyPer = $settings['pos']['loyaltyPerCurrency'] ?? 0;
                 $earned = $loyaltyPer ? (int) floor(Money::toMajor($calc['grandTotal']) * $loyaltyPer) : 0;
+                $startPoints = (int) ($customer['loyaltyPoints'] ?? 0);
+                $nextPoints = $startPoints - $loyaltyRedeemed + $earned;
                 $ctx->repo()->update('customers', $customer['id'], [
                     'totalOrders' => ($customer['totalOrders'] ?? 0) + 1,
                     'totalPurchases' => ($customer['totalPurchases'] ?? 0) + $calc['grandTotal'],
                     'outstandingBalance' => ($customer['outstandingBalance'] ?? 0) + $due,
-                    'loyaltyPoints' => ($customer['loyaltyPoints'] ?? 0) + $earned,
+                    'loyaltyPoints' => $nextPoints,
                     'lastPurchaseAt' => $now,
                 ]);
                 if ($due > 0) {
@@ -322,6 +350,19 @@ final class Sales
                         'id' => $lid, 'customerId' => $customer['id'], 'type' => 'sale_due', 'refType' => 'sale', 'refId' => $saleId,
                         'amount' => $due, 'balanceDelta' => $due, 'note' => "Invoice {$invoiceNo}", 'at' => $now,
                     ], ['customer_id' => $customer['id'], 'type' => 'sale_due', 'ref_type' => 'sale', 'ref_id' => $saleId, 'amount' => $due, 'at' => $now]);
+                }
+                foreach ([
+                    ['loyalty_redeem', -$loyaltyRedeemed, $loyaltyRedeemValue, "Redeemed {$loyaltyRedeemed} points on {$invoiceNo}"],
+                    ['loyalty_earn', $earned, 0, "Earned {$earned} points on {$invoiceNo}"],
+                ] as [$lType, $lPts, $lVal, $lNote]) {
+                    if ($lPts === 0) {
+                        continue;
+                    }
+                    $lid = Uuid::v4();
+                    $ctx->repo()->insert('customer_ledger', $lid, [
+                        'id' => $lid, 'customerId' => $customer['id'], 'type' => $lType, 'refType' => 'sale', 'refId' => $saleId,
+                        'amount' => $lVal, 'balanceDelta' => 0, 'points' => $lPts, 'note' => $lNote, 'at' => $now,
+                    ], ['customer_id' => $customer['id'], 'type' => $lType, 'ref_type' => 'sale', 'ref_id' => $saleId, 'amount' => $lVal, 'at' => $now]);
                 }
             }
 

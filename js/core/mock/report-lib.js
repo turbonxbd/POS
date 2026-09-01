@@ -475,6 +475,33 @@ export function deadStockRows(branchId, days = 90) {
   return rows.sort((a, b) => b.stockValue - a.stockValue);
 }
 
+/** Loyalty: points earned vs redeemed (with the ৳ value) and the live balance. */
+export function loyaltyRows() {
+  const byCust = new Map();
+  for (const l of tdb('customer_ledger').all()) {
+    if (l.type !== 'loyalty_earn' && l.type !== 'loyalty_redeem') continue;
+    const acc = byCust.get(l.customerId) || { earned: 0, redeemed: 0, redeemValue: 0 };
+    if ((l.points || 0) > 0) acc.earned += l.points;
+    else { acc.redeemed += -(l.points || 0); acc.redeemValue += l.amount || 0; }
+    byCust.set(l.customerId, acc);
+  }
+  const rows = [];
+  for (const c of tdb('customers').all()) {
+    const acc = byCust.get(c.id);
+    if (!acc && !((c.loyaltyPoints || 0) > 0)) continue;
+    rows.push({
+      customerId: c.id,
+      customer: c.name,
+      phone: c.phone || '',
+      earned: acc?.earned || 0,
+      redeemed: acc?.redeemed || 0,
+      redeemValue: acc?.redeemValue || 0,
+      balance: c.loyaltyPoints || 0,
+    });
+  }
+  return rows.sort((a, b) => b.balance - a.balance);
+}
+
 export function expenseRows(expenses) {
   return expenses.map((e) => ({
     reference: e.reference,
