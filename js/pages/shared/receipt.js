@@ -90,7 +90,12 @@ export function buildReceipt(sale, { settings = {} } = {}) {
     ? `<div class="rc-barcode">${renderBarcode(sale.invoiceNo, { height: 38, moduleWidth: 1.2, showText: true })}</div>`
     : '';
 
-  return `${style(cfg, sz)}<div class="receipt-preview inv-doc"><div class="rc">
+  const autoPage = cfg.pageHeightAuto || Number(cfg.pageHeight) <= 0;
+  // data-fit-page lets the print step tighten the @page height to the real
+  // content height (see fitReceiptPage in js/utils/print.js) so a short receipt
+  // does not feed a long blank tail.
+  const fitAttr = autoPage ? ` data-fit-page="1" data-fit-wmm="${sz.wMm.toFixed(2)}"` : '';
+  return `${style(cfg, sz)}<div class="receipt-preview inv-doc"${fitAttr}><div class="rc">
     ${logo}${header}${info}${table}${totals}${footer}${barcode}
   </div></div>`;
 }
@@ -114,7 +119,14 @@ function style(cfg, sz) {
   const rot = [0, 90, 180, 270].includes(Number(cfg.printRotation)) ? Number(cfg.printRotation) : 0;
   const quarter = (rot === 90 || rot === 270) && !auto;
   const pageW = quarter ? `${sz.h}${sz.unit}` : `${sz.w}${sz.unit}`;
-  const pageH = auto ? 'auto' : `${quarter ? sz.w : sz.h}${sz.unit}`;
+  // `@page { size: <length> auto }` is INVALID CSS - the whole declaration is
+  // dropped and the browser falls back to the printer's default paper (A4 /
+  // Letter), which is why a "3in auto" receipt was printing on a full sheet.
+  // Always emit two real lengths. For auto height, a generous baseline in mm
+  // (>= the configured max length, floored at ~250mm); fitReceiptPage() in
+  // js/utils/print.js then tightens the printed @page to the real content.
+  const autoBaseMm = Math.max(250, toMm(Number(cfg.pageHeight) || 0, sz.unit));
+  const pageH = auto ? `${autoBaseMm.toFixed(0)}mm` : `${quarter ? sz.w : sz.h}${sz.unit}`;
   const pageSize = `${pageW} ${pageH}`;
   const rotCss = rot ? `transform: rotate(${rot}deg); transform-origin: center center;` : '';
   // 90/270 swap the box itself (in print only) to match the swapped @page, then

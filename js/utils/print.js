@@ -48,6 +48,30 @@ function fitBarcodeLabels(root) {
   });
 }
 
+/**
+ * Tighten the printed @page height of an auto-height receipt to the real
+ * content height. receipt.js emits a valid two-length @page (width x a generous
+ * max) so the browser never falls back to A4 / Letter; here we measure what
+ * actually rendered and append a more specific @page so a short receipt does
+ * not feed a long blank tail. A receipt taller than the baseline is left to
+ * paginate.
+ */
+function fitReceiptPage(root) {
+  const PX_PER_MM = 96 / 25.4;
+  const el = root.querySelector('.receipt-preview.inv-doc[data-fit-page]');
+  if (!el) return;
+  const wmm = parseFloat(el.dataset.fitWmm);
+  if (!(wmm > 0)) return;
+  const hpx = el.scrollHeight || el.getBoundingClientRect().height;
+  if (!(hpx > 0)) return;
+  const hmm = Math.ceil(hpx / PX_PER_MM) + 1; // +1mm safety so nothing clips
+  if (!(hmm > 4) || hmm > 5000) return;
+  const s = root.ownerDocument.createElement('style');
+  s.id = 'afia-fit-page';
+  s.textContent = `@page { size: ${wmm.toFixed(2)}mm ${hmm}mm; margin: 0; }`;
+  root.appendChild(s); // later @page rule wins the size descriptor
+}
+
 export function printHtml(htmlString) {
   const root = ensureRoot();
   root.innerHTML = htmlString;
@@ -64,6 +88,7 @@ export function printHtml(htmlString) {
     // Give the browser a frame to lay out before printing.
     requestAnimationFrame(() => requestAnimationFrame(() => {
       try { fitBarcodeLabels(root); } catch { /* non-fatal */ }
+      try { fitReceiptPage(root); } catch { /* non-fatal */ }
       window.print();
       // Fallback if afterprint never fires (some browsers).
       setTimeout(done, 60000);

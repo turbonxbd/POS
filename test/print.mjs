@@ -65,7 +65,11 @@ T('no A4 / Letter substitution', !/size:\s*A4/i.test(r1) && !/size:\s*letter/i.t
 const rIn = buildReceipt(S, { settings: { print: { invoice: { ...pc.DEFAULT_INVOICE, stockType: 'continuous-fixed', pageWidth: 3, pageHeight: 5, unit: 'in', pageHeightAuto: false } } } });
 T('3x5in -> @page size: 3in 5in', /@page\s*{\s*size:\s*3in 5in/.test(rIn));
 const rAuto = buildReceipt(S, { settings: { print: { invoice: { ...pc.DEFAULT_INVOICE, pageWidth: 80, unit: 'mm', pageHeightAuto: true } } } });
-T('auto height -> @page size: 80mm auto', /@page\s*{\s*size:\s*80mm auto/.test(rAuto));
+// auto height must still emit TWO real lengths ("<w> auto" is invalid CSS and
+// makes the browser fall back to A4/Letter). Width kept, height a big baseline.
+T('auto height -> @page has width + a real length, NOT the invalid "auto"', /@page\s*{\s*size:\s*80mm \d+mm;\s*margin:\s*0/.test(rAuto) && !/@page\s*{\s*size:\s*80mm auto/.test(rAuto));
+T('auto height -> receipt carries data-fit-page for the print-time tighten', /data-fit-page="1"/.test(rAuto) && /data-fit-wmm="80/.test(rAuto));
+T('fixed height -> NO data-fit-page marker', !/data-fit-page/.test(r1));
 T('default receipt shows TOTAL + tax', r1.includes('TOTAL') && /VAT|Tax/.test(r1));
 const rNoTax = buildReceipt(S, { settings: { print: { invoice: { ...pc.DEFAULT_INVOICE, showTax: false, showTaxBreakdown: false } } } });
 T('showTax:false removes tax rows', !/VAT \(5%\)/.test(rNoTax) && !rNoTax.includes('>Tax<'));
@@ -140,7 +144,7 @@ T('orientation matches the printer: "Portrait 180" upright (0), plain "Portrait"
   && pc.barcodeConfig({ print: { barcode: { orientation: 'landscape', printRotation: null } } }).printRotation === 270);
 T('a saved printRotation still wins over orientation (back-compat)', pc.barcodeConfig({ print: { barcode: { orientation: 'portrait', printRotation: 90 } } }).printRotation === 90);
 const bcVar = buildBarcodePages([pc.SAMPLE_LABEL_ITEMS[0]], { settings: { print: { barcode: { ...pc.DEFAULT_BARCODE, labelGap: 0, pageWidth: 50, pageHeight: 30, unit: 'mm', stockType: 'continuous-variable', printRotation: 0 } } } });
-T('continuous-variable barcode stock -> @page auto height', /@page\s*{\s*size:\s*50mm auto/.test(bcVar));
+T('continuous-variable barcode stock -> @page has two real lengths (no invalid "auto")', /@page\s*{\s*size:\s*50mm \d+mm/.test(bcVar) && !/@page\s*{\s*size:\s*50mm auto/.test(bcVar));
 const bcDie = buildBarcodePages([pc.SAMPLE_LABEL_ITEMS[0]], { settings: { print: { barcode: { ...pc.DEFAULT_BARCODE, labelGap: 0, pageWidth: 50, pageHeight: 30, unit: 'mm', stockType: 'die-cut', printRotation: 0 } } } });
 T('die-cut barcode stock -> fixed @page height', /@page\s*{\s*size:\s*50mm 30mm/.test(bcDie));
 
@@ -150,7 +154,11 @@ T('labelGap 3mm -> @page height is the PITCH (30 + 3 = 33mm), width unchanged', 
 T('labelGap -> the label itself stays 30mm (canvas), gap is blank space below', /\.bc-canvas\s*{[^}]*height:\s*30mm/.test(bcGap));
 T('labelGap -> label centred in the pitch (gap split top+bottom, rotation-safe)', /@media print[\s\S]*\.bc-page\s*{[^}]*align-items:\s*center/.test(bcGap));
 T('labelGap default is 0.12in on the barcode default', pc.DEFAULT_BARCODE.labelGap === 0.12);
-T('labelGap is ignored for a continuous-variable (auto) barcode', /@page\s*{\s*size:\s*50mm auto/.test(buildBarcodePages([pc.SAMPLE_LABEL_ITEMS[0]], { settings: { print: { barcode: { ...pc.DEFAULT_BARCODE, pageWidth: 50, pageHeight: 30, unit: 'mm', labelGap: 3, stockType: 'continuous-variable' } } } })));
+{
+  // continuous-variable ignores labelGap: the @page height is NOT 30+3=33
+  const bcVarGap = buildBarcodePages([pc.SAMPLE_LABEL_ITEMS[0]], { settings: { print: { barcode: { ...pc.DEFAULT_BARCODE, pageWidth: 50, pageHeight: 30, unit: 'mm', labelGap: 3, stockType: 'continuous-variable' } } } });
+  T('labelGap is ignored for a continuous-variable (auto) barcode', /@page\s*{\s*size:\s*50mm \d+mm/.test(bcVarGap) && !/@page\s*{\s*size:\s*50mm 33mm/.test(bcVarGap));
+}
 T('barcode still one .bc-page per label with a gap', (bcGap.match(/class="bc-page"/g) || []).length === 2);
 T('data-fit-pad folds in the exposed liner (right/left = 2 + 0.08in≈4.03mm)', /data-fit-pad="[\d.]+\|[\d.]+\|[\d.]+\|[\d.]+"/.test(buildBarcodePages([pc.SAMPLE_LABEL_ITEMS[0]], { settings: {} })));
 

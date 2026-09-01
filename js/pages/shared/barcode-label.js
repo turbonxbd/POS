@@ -104,7 +104,11 @@ function style(cfg, sz) {
   // Skipped for auto height (continuous roll has no gap) and 90/270 turns.
   const gapU = auto || quarter ? 0 : Math.max(0, Number(cfg.labelGap) || 0);
   const pitch = sz.h + gapU; // one label + the gap after it, in the merchant unit
-  const pageSize = auto ? `${sz.w}${sz.unit} auto` : `${sz.w}${sz.unit} ${pitch}${sz.unit}`;
+  // `@page { size: <length> auto }` is INVALID CSS (dropped -> browser prints on
+  // the default A4/Letter sheet). For an auto barcode use a generous fixed
+  // height instead; content shorter than that just leaves the roll blank.
+  const autoH = sz.h * 6;
+  const pageSize = auto ? `${sz.w}${sz.unit} ${autoH}${sz.unit}` : `${sz.w}${sz.unit} ${pitch}${sz.unit}`;
   const labelHeightCss = auto ? `min-height: ${sz.h}${sz.unit}; height: auto;` : `height: ${sz.h}${sz.unit};`;
   const pageHeightCss = auto ? `min-height: ${sz.h}${sz.unit}; height: auto;` : `height: ${pitch}${sz.unit};`;
 
