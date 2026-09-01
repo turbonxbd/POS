@@ -25,12 +25,11 @@ test('sync: GET /sync/changes reports the merchant tables that changed, scoped +
     $quiet = authed($kit, $s, 'GET', '/api/sync/changes', ['query' => ['since' => $after['cursor']]])['body'];
     expect_eq($quiet['changed'], []);
 
-    // a second merchant's change is never reported to the first
-    $kit2 = new TestKit();
-    $s2 = $kit2->loginAs();
-    // note: different TestKit = different db, so this really just proves the query
-    // is merchant-scoped by construction; do an in-db cross-merchant check instead:
-    $now = (new DateTimeImmutable('-1 second'))->format('Y-m-d\TH:i:s.v\Z');
+    // a second merchant's change is never reported to the first.
+    // Poll from the first merchant's OWN latest cursor, then insert a foreign
+    // product with a NEWER timestamp: the only thing that could newly appear is
+    // that foreign row, and it must be scoped out.
+    $isoSince = $quiet['cursor'];        // == the first merchant's most recent write
     usleep(5000);
     $other = \Afia\Support\Uuid::v4();
     $c = \Afia\Support\Clock::now();
@@ -38,7 +37,7 @@ test('sync: GET /sync/changes reports the merchant tables that changed, scoped +
         "INSERT INTO products (id, merchant_id, sku, barcode, name, doc, created_at, updated_at) VALUES (:id,:m,'X-1','2000000009147','Foreign',:d,:c,:c)",
         [':id' => $other, ':m' => 'some-other-merchant', ':d' => json_encode(['id' => $other, 'name' => 'Foreign']), ':c' => $c],
     );
-    $iso = authed($kit, $s, 'GET', '/api/sync/changes', ['query' => ['since' => $now]])['body'];
+    $iso = authed($kit, $s, 'GET', '/api/sync/changes', ['query' => ['since' => $isoSince]])['body'];
     expect_eq($iso['changed'], [], 'another merchant\'s product must not surface here');
 
     // unauthenticated -> 401

@@ -85,8 +85,11 @@ final class Catalog
         foreach (['categoryId' => 'category_id', 'brandId' => 'brand_id', 'supplierId' => 'supplier_id'] as $qk => $col) {
             if (!empty($q[$qk])) {
                 if ($qk === 'categoryId') {
-                    $where[] = '(category_id = :cat OR subcategory_id = :cat)';
+                    // two placeholders, not one reused - native MySQL prepares
+                    // (ATTR_EMULATE_PREPARES=false) reject a reused named param.
+                    $where[] = '(category_id = :cat OR subcategory_id = :cat2)';
                     $params[':cat'] = $q[$qk];
+                    $params[':cat2'] = $q[$qk];
                 } else {
                     $where[] = "{$col} = :{$col}";
                     $params[":{$col}"] = $q[$qk];

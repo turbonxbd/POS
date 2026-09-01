@@ -40,11 +40,18 @@ final class Sync
             $mid = $ctx->merchantId ?? '';
             $since = (string) ($ctx->request->query['since'] ?? '');
 
+            // Each SELECT gets its OWN placeholder: PDO runs with
+            // ATTR_EMULATE_PREPARES=false, and native MySQL prepares reject a
+            // named placeholder that is reused across the statement.
             $parts = [];
+            $params = [];
+            $i = 0;
             foreach (self::WATCH as $table => $col) {
-                $parts[] = "SELECT '{$table}' AS t, MAX({$col}) AS m FROM {$table} WHERE merchant_id = :m";
+                $p = ':m' . $i++;
+                $parts[] = "SELECT '{$table}' AS t, MAX({$col}) AS m FROM {$table} WHERE merchant_id = {$p}";
+                $params[$p] = $mid;
             }
-            $rows = $ctx->db->all(implode("\nUNION ALL\n", $parts), [':m' => $mid]);
+            $rows = $ctx->db->all(implode("\nUNION ALL\n", $parts), $params);
 
             $changed = [];
             $cursor = $since;
