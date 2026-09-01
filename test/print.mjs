@@ -133,7 +133,7 @@ T('printRotation 90 -> data-fit swapped to 30 x 50', /data-fit-w="30" data-fit-h
 /* ---------- barcode: exposed liner + orientation + stock type ---------- */
 const bcLiner = buildBarcodePages([pc.SAMPLE_LABEL_ITEMS[0]], { settings: { print: { barcode: { ...pc.DEFAULT_BARCODE, labelGap: 0, pageWidth: 50, pageHeight: 30, unit: 'mm', linerLeft: 3, linerRight: 3, marginLeft: 1, marginRight: 1, printRotation: 0 } } } });
 T('exposed liner folds into the canvas horizontal padding (1 + 3 = 4mm each side)', /\.bc-canvas\s*{[^}]*padding:\s*[\d.]+mm 4mm [\d.]+mm 4mm/.test(bcLiner));
-T('default barcode = die-cut, 0.08in liner each side, portrait-180', pc.DEFAULT_BARCODE.stockType === 'die-cut' && pc.DEFAULT_BARCODE.linerLeft === 0.08 && pc.barcodeConfig({}).printRotation === 180 && pc.barcodeConfig({}).orientation === 'portrait-180');
+T('default barcode = die-cut, 0.08in liner each side, NO rotation (driver does the flip)', pc.DEFAULT_BARCODE.stockType === 'die-cut' && pc.DEFAULT_BARCODE.linerLeft === 0.08 && pc.barcodeConfig({}).printRotation === 0 && pc.barcodeConfig({}).orientation === 'portrait');
 T('orientation -> degrees (driver-match)', pc.barcodeConfig({ print: { barcode: { orientation: 'portrait', printRotation: null } } }).printRotation === 0
   && pc.barcodeConfig({ print: { barcode: { orientation: 'portrait-180', printRotation: null } } }).printRotation === 180
   && pc.barcodeConfig({ print: { barcode: { orientation: 'landscape', printRotation: null } } }).printRotation === 90
@@ -148,7 +148,7 @@ T('die-cut barcode stock -> fixed @page height', /@page\s*{\s*size:\s*50mm 30mm/
 const bcGap = buildBarcodePages([pc.SAMPLE_LABEL_ITEMS[0], pc.SAMPLE_LABEL_ITEMS[1]], { settings: { print: { barcode: { ...pc.DEFAULT_BARCODE, pageWidth: 50, pageHeight: 30, unit: 'mm', labelGap: 3, printRotation: 0 } } } });
 T('labelGap 3mm -> @page height is the PITCH (30 + 3 = 33mm), width unchanged', /@page\s*{\s*size:\s*50mm 33mm/.test(bcGap));
 T('labelGap -> the label itself stays 30mm (canvas), gap is blank space below', /\.bc-canvas\s*{[^}]*height:\s*30mm/.test(bcGap));
-T('labelGap -> in print the label is pinned to the top of the page', /@media print[\s\S]*\.bc-page\s*{[^}]*align-items:\s*flex-start/.test(bcGap));
+T('labelGap -> label centred in the pitch (gap split top+bottom, rotation-safe)', /@media print[\s\S]*\.bc-page\s*{[^}]*align-items:\s*center/.test(bcGap));
 T('labelGap default is 0.12in on the barcode default', pc.DEFAULT_BARCODE.labelGap === 0.12);
 T('labelGap is ignored for a continuous-variable (auto) barcode', /@page\s*{\s*size:\s*50mm auto/.test(buildBarcodePages([pc.SAMPLE_LABEL_ITEMS[0]], { settings: { print: { barcode: { ...pc.DEFAULT_BARCODE, pageWidth: 50, pageHeight: 30, unit: 'mm', labelGap: 3, stockType: 'continuous-variable' } } } })));
 T('barcode still one .bc-page per label with a gap', (bcGap.match(/class="bc-page"/g) || []).length === 2);

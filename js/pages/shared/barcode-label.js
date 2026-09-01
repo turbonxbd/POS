@@ -153,14 +153,16 @@ function style(cfg, sz) {
     @media print {
       html, body { background: #fff !important; margin: 0 !important; padding: 0 !important; }
       .bc-run { width: ${sz.w}${sz.unit}; margin: 0 auto !important; }
-      /* One printed page == one label PITCH. The label sits at the TOP of the
-         page; the die-cut gap is the blank strip below it. .bc-canvas holds the
-         content (swapped for a 90/270 turn), rotated + clipped inside the label
-         so nothing bleeds onto the next physical label. */
+      /* One printed page == one label PITCH (label + die-cut gap). The label is
+         CENTRED in the page so the blank gap is split evenly top and bottom -
+         this stays correct whether the label is turned 180 by our CSS, by the
+         printer driver, or by neither. .bc-canvas holds the content (swapped for
+         a 90/270 turn), rotated + clipped inside the label so nothing bleeds
+         onto the next physical label. */
       .bc-page {
         width: ${sz.w}${sz.unit}; ${pageHeightCss}
         margin: 0 auto; overflow: hidden;
-        align-items: flex-start; /* label pinned to the top, gap below */
+        align-items: center; justify-content: center;
       }
       /* Break AFTER every label except the last -> exactly N pages, no trailing
          blank page. 1 barcode = 1 page, strict. */

@@ -214,13 +214,18 @@ export const DEFAULT_BARCODE = {
    * driver's paper orientation is portrait). 90 or 270 also swap the emitted
    * @page to portrait so the printer stops re-rotating the page itself.
    */
-  // orientation mirrors the driver's Orientation radio (see ORIENTATIONS).
-  // Set it to the SAME value as the driver: our CSS rotates the content by the
-  // same angle and cancels the driver's turn, so the label prints upright.
-  // printRotation is derived from it in barcodeConfig(); a direct printRotation
-  // in saved settings still wins (back-compat).
-  orientation: 'portrait-180',
-  printRotation: 180,
+  /**
+   * orientation / printRotation - rotate EACH label for the physical print
+   * only (screen preview is never rotated).
+   *
+   * Use rotation in ONE place, not two. The printer driver's own "Orientation:
+   * Portrait 180" already flips the page; if you ALSO set 180 here the two
+   * turns fight (the label comes out reading bottom-to-top). So the default is
+   * 0 - let the driver do the flip. Only set this to 180 if you instead put the
+   * driver back to plain Portrait and want the flip done here.
+   */
+  orientation: 'portrait',
+  printRotation: 0,
 
   /**
    * content - rendered TOP -> BOTTOM in this fixed order:
