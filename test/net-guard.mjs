@@ -63,5 +63,17 @@ reachableNow = true;
 await sleep(4200); // RECHECK_MS is 4000
 T('the background re-check clears the block without an online event', !document.querySelector('.net-guard'));
 
+// the proactive watch blocks even when NO `offline` event fires (Wi-Fi stays
+// "connected" but the internet is gone) - after MISSES_TO_BLOCK misses
+const { _watchTick } = await import('../js/components/net-guard.js');
+reachableNow = false;
+await _watchTick();
+T('one silent probe miss does not blank the app yet', !document.querySelector('.net-guard'));
+await _watchTick();
+T('a second silent miss blocks the app with no offline event', !!document.querySelector('.net-guard'));
+reachableNow = true;
+await sleep(4200);
+T('recovers once the connection is back', !document.querySelector('.net-guard'));
+
 console.log(`\n===== ${pass} passed, ${fail} failed =====`);
 process.exit(fail ? 1 : 0);

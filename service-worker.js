@@ -15,10 +15,10 @@
  * shows a "new version" prompt when a fresh worker is waiting.
  */
 
-// v7: print pipeline overhaul - @page A4-fallback fix, orientation remap to the
-// printer's convention, die-cut label gap, fitReceiptPage, cross-tab settings
-// freshness. Installed apps MUST drop the old cache to pick these up.
-const VERSION = 'pos-txbd-v7';
+// v8: print pipeline overhaul (@page A4-fallback fix, orientation remap, die-cut
+// label gap, fitReceiptPage, cross-tab settings freshness) + net-guard proactive
+// offline watch. Installed apps MUST drop the old cache to pick these up.
+const VERSION = 'pos-txbd-v8';
 const SHELL_CACHE = `${VERSION}-shell`;
 
 // Enough of the boot chain to open offline; lazy page modules cache on first use.
