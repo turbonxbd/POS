@@ -33,7 +33,8 @@ for (const rel of ['assets/logos/icon-192.png', 'assets/logos/icon-512.png', 'as
 
 /* ---- service worker ---- */
 const sw = read('service-worker.js');
-T('service worker VERSION is bumped to v6', /VERSION\s*=\s*'pos-txbd-v6'/.test(sw));
+T('service worker VERSION is bumped to v7', /VERSION\s*=\s*'pos-txbd-v7'/.test(sw));
+T('shell precache includes the print pipeline (installed app stays current)', /js\/pages\/shared\/receipt\.js/.test(sw) && /js\/pages\/shared\/barcode-label\.js/.test(sw) && /js\/core\/print-config\.js/.test(sw) && /js\/services\/settings-service\.js/.test(sw));
 T('shell precache includes portal.html', /'portal\.html'/.test(sw));
 T('shell precache does NOT include superadmin.html (panel isolation)', !/superadmin\.html/.test(sw));
 T('cross-origin requests are passed through', /url\.origin !== self\.location\.origin/.test(sw) && /return;/.test(sw));

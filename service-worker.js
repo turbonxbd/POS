@@ -15,7 +15,10 @@
  * shows a "new version" prompt when a fresh worker is waiting.
  */
 
-const VERSION = 'pos-txbd-v6';
+// v7: print pipeline overhaul - @page A4-fallback fix, orientation remap to the
+// printer's convention, die-cut label gap, fitReceiptPage, cross-tab settings
+// freshness. Installed apps MUST drop the old cache to pick these up.
+const VERSION = 'pos-txbd-v7';
 const SHELL_CACHE = `${VERSION}-shell`;
 
 // Enough of the boot chain to open offline; lazy page modules cache on first use.
@@ -29,6 +32,10 @@ const SHELL_ASSETS = [
   'js/core/event-bus.js', 'js/core/http.js', 'js/core/session.js', 'js/core/router.js',
   'js/core/i18n.js', 'js/data/i18n-bn.js', 'js/components/lang-switch.js',
   'js/components/net-guard.js', 'js/core/sync-poll.js', 'js/core/sync-queue.js',
+  // print pipeline - kept in the shell so it is always current in the installed app
+  'js/core/print-config.js', 'js/utils/print.js',
+  'js/pages/shared/receipt.js', 'js/pages/shared/barcode-label.js',
+  'js/services/settings-service.js',
   'js/app-live.js', 'js/app-portal.js', 'js/app-login.js', 'js/app-admin.js', 'js/app-cashier.js',
   'assets/logos/favicon.svg', 'assets/logos/icon.svg',
   'assets/logos/icon-192.png', 'assets/logos/icon-512.png', 'assets/logos/apple-touch-icon.png',
