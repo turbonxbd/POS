@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const suites = ['money.mjs', 'backend.mjs', 'render.mjs', 'pos-checkout.mjs', 'portal.mjs', 'app-boot.mjs', 'dashboard.mjs', 'i18n.mjs', 'print.mjs', 'product-barcode.mjs', 'exchange-return.mjs', 'platform.mjs', 'billing.mjs', 'chat.mjs', 'e2e-flow.mjs', 'sync.mjs'];
+const suites = ['money.mjs', 'backend.mjs', 'render.mjs', 'pos-checkout.mjs', 'portal.mjs', 'app-boot.mjs', 'dashboard.mjs', 'i18n.mjs', 'print.mjs', 'product-barcode.mjs', 'exchange-return.mjs', 'platform.mjs', 'billing.mjs', 'chat.mjs', 'e2e-flow.mjs', 'sync.mjs', 'net-guard.mjs'];
 
 let failed = 0;
 for (const s of suites) {

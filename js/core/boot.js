@@ -77,6 +77,8 @@ export function boot({ seedIfEmpty = true } = {}) {
     } catch (err) {
       console.warn('[boot] i18n init failed', err);
     }
+    // Full-screen "No Internet" block, on every panel.
+    import('../components/net-guard.js').then((m) => m.startNetGuard()).catch(() => {});
 
     store.set({ bootReady: true });
     return true;

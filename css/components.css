@@ -1091,3 +1091,52 @@
 .payment-method[data-id="rocket"].is-selected { border-color: #8c3494; background: color-mix(in srgb, #8c3494 8%, var(--surface, #fff)); }
 .payment-method[data-id="upay"].is-selected   { border-color: #0a8f3c; background: color-mix(in srgb, #0a8f3c 8%, var(--surface, #fff)); }
 .payment-method[data-id="bank"].is-selected   { border-color: #3b6cff; background: color-mix(in srgb, #3b6cff 8%, var(--surface, #fff)); }
+
+/* ── "No Internet" full-screen block ─────────────────────────────────────── */
+html.net-guard-lock { overflow: hidden !important; }
+html.net-guard-lock body { overflow: hidden !important; pointer-events: none; }
+.net-guard {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-net-guard);
+  display: grid;
+  place-items: center;
+  padding: var(--sp-4);
+  pointer-events: auto;
+  background: color-mix(in srgb, var(--bg-body, #0b0d12) 76%, rgba(0,0,0,.55));
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+  animation: net-guard-in 120ms ease-out;
+}
+@keyframes net-guard-in { from { opacity: 0; } to { opacity: 1; } }
+.net-guard__card {
+  max-width: 400px;
+  width: 100%;
+  text-align: center;
+  padding: 32px 28px;
+  border-radius: var(--radius-lg, 12px);
+  background: var(--bg-surface, #fff);
+  border: 1px solid var(--border-subtle, rgba(0,0,0,.08));
+  box-shadow: 0 24px 64px rgba(0,0,0,.35);
+}
+.net-guard__icon {
+  display: inline-grid;
+  place-items: center;
+  width: 60px; height: 60px;
+  margin-bottom: 14px;
+  border-radius: 50%;
+  color: var(--warning-fg, #b45309);
+  background: color-mix(in srgb, var(--warning-fg, #b45309) 14%, transparent);
+}
+.net-guard__card h2 { margin: 0 0 8px; font-size: 1.15rem; }
+.net-guard__card p { margin: 0 0 16px; color: var(--text-muted); line-height: 1.6; }
+.net-guard__status {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: var(--fs-sm); color: var(--text-muted); margin-bottom: 16px;
+}
+.net-guard__dot {
+  width: 9px; height: 9px; border-radius: 50%;
+  background: var(--warning-fg, #b45309);
+  animation: net-guard-pulse 1.4s ease-in-out infinite;
+}
+@keyframes net-guard-pulse { 0%,100% { opacity: .35; } 50% { opacity: 1; } }

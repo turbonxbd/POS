@@ -194,6 +194,7 @@
   --z-modal: 1000;
   --z-toast: 1100;
   --z-tooltip: 1200;
+  --z-net-guard: 2147483000;
 
   color-scheme: light;
 }
